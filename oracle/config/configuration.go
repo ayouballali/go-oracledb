@@ -69,6 +69,8 @@ type OracleDriverProperties struct {
 	//
 	// The default is 32 MiB.
 	DefaultLobPrefetchSize int `default:"33554432" validator:"validateZeroOrPositive"  help:"default prefetch size"`
+
+	TTCCookieOptimizationEnabled bool `default:"true" validator:"validateBoolean" help:"enables TTC cookie optimization"`
 }
 
 func (config OracleDriverProperties) String() string {
@@ -81,6 +83,10 @@ func (config OracleDriverProperties) IsStrictNullValueHandling() bool {
 
 func (config OracleDriverProperties) GetDefaultLobPrefetchSize() int {
 	return config.DefaultLobPrefetchSize
+}
+
+func (config OracleDriverProperties) IsTTCCookieOptimizationEnabled() bool {
+	return config.TTCCookieOptimizationEnabled
 }
 
 // OracleConnectionProperties contains Oracle Net connection properties used to

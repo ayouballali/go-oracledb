@@ -59,7 +59,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-var testCases = []oracleTest.CategorizedTestCase{}
+var testCases = []oracleTest.CategorizedTestCase{
+	{Name: "TestTTCCookiePropertyDefaults", Categories: "unitary", Exclusive: false, Fn: TestTTCCookiePropertyDefaults}}
 
 func TestCategoryExecutor(t *testing.T) {
 	oracleTest.RunCategoryExecutor(t, oracleTest.TestCategories, testCases)

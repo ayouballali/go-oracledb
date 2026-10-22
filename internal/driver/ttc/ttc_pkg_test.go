@@ -80,6 +80,9 @@ var TestEnvironement TestingEnvironment
 var TestingConfig *TestConfig
 
 var testCases = []oracleTest.CategorizedTestCase{
+	{Name: "TestTTICookieMarshalWire", Categories: "unitary", Exclusive: false, Fn: TestTTICookieMarshalWire},
+	{Name: "TestTTICookieSnapshotIsolation", Categories: "unitary", Exclusive: false, Fn: TestTTICookieSnapshotIsolation},
+	{Name: "TestTTICookieEligibility", Categories: "unitary", Exclusive: false, Fn: TestTTICookieEligibility},
 	{Name: "TestMessageStreamer_PullUsesMessageSpecificMarshallers", Categories: "unitary", Exclusive: false, Fn: TestMessageStreamer_PullUsesMessageSpecificMarshallers},
 	{Name: "TestMessageStreamer_FlushUsesMessageSpecificMarshallers", Categories: "unitary", Exclusive: false, Fn: TestMessageStreamer_FlushUsesMessageSpecificMarshallers},
 	{Name: "TestColumnDecoderRegistrations", Categories: "unitary", Exclusive: false, Fn: TestColumnDecoderRegistrations},
