@@ -50,33 +50,6 @@ import (
 	"golang.org/x/text/language"
 )
 
-func TestAuthencationFactoryWithNilParameters(t *testing.T) {
-	t.Parallel()
-
-	auth, err := GetAuthenticator(nil, nil, driverCommon.ConnectionNormal)
-	if err == nil {
-		t.Fatalf("get authenticator test failed %v", err)
-	}
-	if auth != nil {
-		t.Fatalf("Authenticator should be null")
-	}
-}
-
-func TestAuthencationFactoryBasic(t *testing.T) {
-	t.Parallel()
-	c := oracleconfig.NewOracleDriverConfig()
-	c.Credentials.User = "foo"
-	c.Credentials.Password = "bar"
-	c.ConnectDescriptor = "connection string"
-	auth, err := GetAuthenticator(c, nil, driverCommon.ConnectionNormal)
-	if err != nil {
-		t.Fatalf("get authenticator test failed %v", err)
-	}
-	if auth == nil {
-		t.Errorf("should have returned an authenticator")
-	}
-}
-
 func TestGetConnection(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

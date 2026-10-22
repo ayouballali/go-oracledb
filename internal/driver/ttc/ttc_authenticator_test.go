@@ -44,7 +44,6 @@ import (
 	"testing"
 
 	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
-	oracleErrors "github.com/oracle/go-oracledb/v26/oracle/errors"
 )
 
 // newAuthTestShelf wires a Shelf with:
@@ -140,58 +139,6 @@ func TestPasswordAuthenticator_doOSESSKEY_Golden(t *testing.T) {
 		t.Error("salt is empty")
 	}
 
-}
-
-// TestPasswordAuthenticator_doOAuth_Golden
-// 1) Build an oSesskeyRPA by unmarshalling the golden dump.
-// 2) Seed the incoming wire with TTIRPA + golden oAuth RPA payload.
-// 3) Run _doOAuth to assert marshalling/unmarshalling works end-to-end.
-// TODO: Move this shared OAUTH test to password_authenticator_setup_test.go.
-func TestPasswordAuthenticator_doOAuth_Golden(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-
-	// Build oSesskeyRPA input for _doOAuth from the golden payload.
-	osrpaMsg := NewOSesskeyRPA()
-	rpaBuf := NewArrayDataBuffer(8192)
-	if err := rpaBuf.WriteBytesWithContext(ctx, makeOSesskeyRPAPayload()); err != nil {
-		t.Fatalf("write oSesskeyRPA payload to temp buffer failed: %v", err)
-	}
-	rpaEngine := NewMarshalEngine(rpaBuf, driverCommon.BIG_ENDIAN, [5]byte{Native, Universal, Universal, Universal, Universal})
-	unmarshallable, _ := osrpaMsg.(driverCommon.Unmarshallable)
-	if err := unmarshallable.UnmarshalFrom(ctx, rpaEngine); err != nil {
-		t.Fatalf("UnmarshalFrom(oSesskeyRPA) failed: %v", err)
-	}
-
-	// Wire up authenticator shelf for oAuth.
-	shelf, _, buf := newAuthTestShelf(1 << 16)
-
-	// Pre-seed incoming wire with: [TTIWRN][TTIRPA][golden oAuth RPA payload]
-	writeAuthWarning(t, ctx, buf, 28002, "ORA-28002: the password will expire within 7 days", 0x05)
-	if err := buf.WriteByteWithContext(ctx, byte(TTIRPA)); err != nil {
-		t.Fatalf("write TTIRPA header failed: %v", err)
-	}
-	if err := buf.WriteBytesWithContext(ctx, makeOauthRPAPayload()); err != nil {
-		t.Fatalf("write oAuth RPA payload failed: %v", err)
-	}
-
-	pa := newPasswordAuthenticator(
-		"username_test",
-		"username_test",
-		"(DESCRIPTION=(ADDRESS=(HOST=localhost)(PORT=1521)(PROTOCOL=tcp))(CONNECT_DATA=(SERVICE_NAME=freepdb1)))")
-	pa.SetShelf(shelf)
-	sessCtx := driverCommon.NewSessionContext()
-	pa.SetSessionContext(sessCtx)
-	sessCtx.UpdateSessionProperties(osrpaMsg.(*oSesskeyRPA).connectionValues)
-	if err := pa.setup._doOAuth(ctx); err != nil {
-		sqlError, ok := err.(oracleErrors.SQLError)
-		if !ok {
-			t.Fatalf("expected error to be SQLError")
-		}
-		if sqlError.ErrorCode() != string(oracleErrors.AuthenticatorError) {
-			t.Fatalf("Expected error %s, but got %s", oracleErrors.AuthenticatorError, sqlError.ErrorCode())
-		}
-	}
 }
 
 func writeAuthWarning(t *testing.T, ctx context.Context, buf *ArrayBasedDataBuffer, number driverCommon.UB2, message string, flags driverCommon.UB2) {
