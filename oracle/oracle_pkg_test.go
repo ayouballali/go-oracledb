@@ -59,6 +59,9 @@ func TestMain(m *testing.M) {
 }
 
 var testCases = []oracleTest.CategorizedTestCase{
+	{Name: "TestDriver_TTCCookieConnectionTiming", Categories: "performance", Exclusive: true, Fn: TestDriver_TTCCookieConnectionTiming},
+	{Name: "TestDriver_TTCCookieTTIRENEG", Categories: "functional", Exclusive: true, Fn: TestDriver_TTCCookieTTIRENEG},
+	{Name: "TestDriver_TTCCookieOCIToken", Categories: "functional", Exclusive: true, Fn: TestDriver_TTCCookieOCIToken},
 	{Name: "TestConnectorCookieFallback", Categories: "unitary", Exclusive: false, Fn: TestConnectorCookieFallback},
 	{Name: "TestDriver_ConfigurationWithConnectorBasic", Categories: "functional", Exclusive: true, Fn: TestDriver_ConfigurationWithConnectorBasic},
 	{Name: "TestDriver_ConfigurationWithConnectorWithEnvOverwrite", Categories: "functional", Exclusive: true, Fn: TestDriver_ConfigurationWithConnectorWithEnvOverwrite},

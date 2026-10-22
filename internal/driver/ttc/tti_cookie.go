@@ -158,3 +158,30 @@ func IsTTCCookieEligible(
 	return properties.IsTTCCookieOptimizationEnabled() &&
 		strings.TrimSpace(databaseUUID) != ""
 }
+
+// ClearTTCCookieCacheForTest resets cached TTC negotiation data for integration tests.
+func ClearTTCCookieCacheForTest() {
+	databaseNegotiatedInformation.Clear()
+}
+
+// CorruptTTCCookieForTest replaces only the specified database's cached cookie
+// with a stale copy, preserving the original value for existing users of it.
+func CorruptTTCCookieForTest(databaseUUID string) (driverCommon.UB2, bool) {
+	cookie, found := GetCachedTTCCookie(databaseUUID)
+	if !found {
+		return 0, false
+	}
+	stale := *cookie
+	stale.connectionProtocolVersion = 0
+	databaseNegotiatedInformation.Put(databaseUUID, &stale)
+	return cookie.connectionProtocolVersion, true
+}
+
+// TTCCookieProtocolVersionForTest reports the version cached for this database.
+func TTCCookieProtocolVersionForTest(databaseUUID string) (driverCommon.UB2, bool) {
+	cookie, found := GetCachedTTCCookie(databaseUUID)
+	if !found {
+		return 0, false
+	}
+	return cookie.connectionProtocolVersion, true
+}
