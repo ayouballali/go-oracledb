@@ -261,7 +261,8 @@ func TestGetAuthenticator_UsesTokenAuthenticatorForSignedToken(t *testing.T) {
 		mockSignedTokenAuthenticationProvider{
 			mockTokenAuthenticationProvider: mockTokenAuthenticationProvider{token: "token-value"},
 		},
-	))
+	),
+	)
 	if err != nil {
 		t.Fatalf("GetAuthenticator returned error: %v", err)
 	}
@@ -281,7 +282,8 @@ func TestGetAuthenticator_UsesTokenAuthenticatorForOAuth(t *testing.T) {
 
 	authenticator, err := GetAuthenticator(cfg, newTestProviderRegistry(
 		mockTokenAuthenticationProvider{token: "token-value"},
-	))
+	),
+	)
 	if err != nil {
 		t.Fatalf("GetAuthenticator returned error: %v", err)
 	}
@@ -362,12 +364,12 @@ func TestSignedTokenProviderGenerateTokenHeader(t *testing.T) {
 	sessContext.GetClientProperties().SetProperty(driverCommon.RemotePort, 1522)
 	sessContext.GetClientProperties().SetProperty(driverCommon.ConnectDescriptor, "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)(HOST=adb.example.com)(PORT=1522))(CONNECT_DATA=(SERVICE_NAME=freepdb1)))")
 
-	authenticator := &tokenAuthenticator{
+	setup := &tokenAuthenticatorSetup{
 		tokenProvider:  mockSignedTokenAuthenticationProvider{},
 		sessionContext: sessContext,
 	}
 
-	header, err := authenticator.generateTokenHeader()
+	header, err := setup.generateTokenHeader()
 	if err != nil {
 		t.Fatalf("generateTokenHeader returned error: %v", err)
 	}
@@ -437,14 +439,14 @@ func TestTokenAuthenticatorSignHeaderForSignedProvider(t *testing.T) {
 
 	keyPEM := encodePrivateKeyPEM(t, privateKey)
 	var tokenSeen string
-	authenticator := &tokenAuthenticator{
+	setup := &tokenAuthenticatorSetup{
 		tokenProvider: mockSignedTokenAuthenticationProvider{
 			privateKey: keyPEM,
 			tokenSeen:  &tokenSeen,
 		},
 	}
 
-	got, err := authenticator.signHeader(
+	got, err := setup.signHeader(
 		context.Background(),
 		"date: Mon, 10 Aug 2026 10:00:00 GMT",
 		"token-value",
@@ -468,11 +470,11 @@ func TestTokenAuthenticatorSignHeaderForSignedProvider(t *testing.T) {
 func TestTokenAuthenticatorSignHeaderForOAuthProviderReturnsEmpty(t *testing.T) {
 	t.Parallel()
 
-	authenticator := &tokenAuthenticator{
+	setup := &tokenAuthenticatorSetup{
 		tokenProvider: mockTokenAuthenticationProvider{token: "token-value"},
 	}
 
-	got, err := authenticator.signHeader(
+	got, err := setup.signHeader(
 		context.Background(),
 		"date: Mon, 10 Aug 2026 10:00:00 GMT",
 		"token-value",
@@ -516,21 +518,24 @@ func TestTokenAuthenticatorAuthenticateValidation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		auth     *tokenAuthenticator
-		wantCode oracleErrors.ErrorCode
+		name           string
+		provider       oracleProviders.TokenAuthenticationProvider
+		sessionContext *driverCommon.SessionContext
+		wantCode       oracleErrors.ErrorCode
 	}{
-		{name: "nil provider", auth: &tokenAuthenticator{}, wantCode: oracleErrors.NoAuthenticatorError},
-		{name: "nil session context", auth: &tokenAuthenticator{tokenProvider: mockTokenAuthenticationProvider{token: "token"}}, wantCode: oracleErrors.InternalError},
-		{name: "provider error", auth: &tokenAuthenticator{tokenProvider: mockTokenAuthenticationProvider{err: errors.New("token unavailable")}, sessionContext: driverCommon.NewSessionContext()}, wantCode: oracleErrors.AuthenticatorError},
-		{name: "empty token", auth: &tokenAuthenticator{tokenProvider: mockTokenAuthenticationProvider{}, sessionContext: driverCommon.NewSessionContext()}, wantCode: oracleErrors.EmptyTokenError},
-		{name: "expired jwt", auth: &tokenAuthenticator{tokenProvider: mockTokenAuthenticationProvider{token: "eyJhbGciOiJub25lIn0.eyJleHAiOjF9."}, sessionContext: driverCommon.NewSessionContext()}, wantCode: oracleErrors.AuthenticatorError},
-		{name: "signed token missing descriptor", auth: &tokenAuthenticator{tokenProvider: mockSignedTokenAuthenticationProvider{mockTokenAuthenticationProvider: mockTokenAuthenticationProvider{token: "token"}}, sessionContext: driverCommon.NewSessionContext()}, wantCode: oracleErrors.AuthenticatorError},
+		{name: "nil provider", wantCode: oracleErrors.NoAuthenticatorError},
+		{name: "nil session context", provider: mockTokenAuthenticationProvider{token: "token"}, wantCode: oracleErrors.InternalError},
+		{name: "provider error", provider: mockTokenAuthenticationProvider{err: errors.New("token unavailable")}, sessionContext: driverCommon.NewSessionContext(), wantCode: oracleErrors.AuthenticatorError},
+		{name: "empty token", provider: mockTokenAuthenticationProvider{}, sessionContext: driverCommon.NewSessionContext(), wantCode: oracleErrors.EmptyTokenError},
+		{name: "expired jwt", provider: mockTokenAuthenticationProvider{token: "eyJhbGciOiJub25lIn0.eyJleHAiOjF9."}, sessionContext: driverCommon.NewSessionContext(), wantCode: oracleErrors.AuthenticatorError},
+		{name: "signed token missing descriptor", provider: mockSignedTokenAuthenticationProvider{mockTokenAuthenticationProvider: mockTokenAuthenticationProvider{token: "token"}}, sessionContext: driverCommon.NewSessionContext(), wantCode: oracleErrors.AuthenticatorError},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tokenAuthErrorCode(t, tt.auth.Authenticate(context.Background())); got != tt.wantCode {
+			authenticator := newTokenAuthenticator(tt.provider)
+			authenticator.SetSessionContext(tt.sessionContext)
+			if got := tokenAuthErrorCode(t, authenticator.Authenticate(context.Background())); got != tt.wantCode {
 				t.Fatalf("error code = %s, want %s", got, tt.wantCode)
 			}
 		})
@@ -668,16 +673,16 @@ func TestTokenAuthenticatorSettersAndHeaderValidation(t *testing.T) {
 	shelf, _, _ := newAuthTestShelf(1 << 12)
 	authenticator := newTokenAuthenticator(mockTokenAuthenticationProvider{})
 	authenticator.SetShelf(shelf)
-	if authenticator.shelf.GetMessageFactory() == nil {
+	if authenticator.tokenSetupAuthenticator.shelf.GetMessageFactory() == nil {
 		t.Fatal("SetShelf did not store the shelf")
 	}
 	sessionContext := driverCommon.NewSessionContext()
 	authenticator.SetSessionContext(sessionContext)
-	if authenticator.sessionContext != sessionContext {
+	if authenticator.tokenSetupAuthenticator.sessionContext != sessionContext {
 		t.Fatal("SetSessionContext did not store the session context")
 	}
 
-	signed := &tokenAuthenticator{tokenProvider: mockSignedTokenAuthenticationProvider{}, sessionContext: sessionContext}
+	signed := &tokenAuthenticatorSetup{tokenProvider: mockSignedTokenAuthenticationProvider{}, sessionContext: sessionContext}
 	tests := []struct {
 		name string
 		set  func()
@@ -719,9 +724,9 @@ func TestTokenAuthenticatorSignHeaderErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			authenticator := &tokenAuthenticator{tokenProvider: tt.provider}
+			setup := &tokenAuthenticatorSetup{tokenProvider: tt.provider}
 			if got := tokenAuthErrorCode(t, func() error {
-				_, err := authenticator.signHeader(context.Background(), "header", "token")
+				_, err := setup.signHeader(context.Background(), "header", "token")
 				return err
 			}()); got != tt.wantCode {
 				t.Fatalf("error code = %s, want %s", got, tt.wantCode)
@@ -738,9 +743,9 @@ func TestTokenAuthenticatorSignHeaderErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	authenticator := &tokenAuthenticator{tokenProvider: mockSignedTokenAuthenticationProvider{privateKey: pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes})}}
+	setup := &tokenAuthenticatorSetup{tokenProvider: mockSignedTokenAuthenticationProvider{privateKey: pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes})}}
 	if got := tokenAuthErrorCode(t, func() error {
-		_, err := authenticator.signHeader(context.Background(), "header", "token")
+		_, err := setup.signHeader(context.Background(), "header", "token")
 		return err
 	}()); got != oracleErrors.TokenAuthenticationError {
 		t.Fatalf("non-RSA key error code = %s", got)
