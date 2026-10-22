@@ -74,62 +74,6 @@ func (setupInstantiator *ConnectionInstantiatorSetup) PrepareForAuthetication(se
 	}
 }
 
-// *** Authenticator Factory ***
-
-// GetAuthenticator selects the authenticator to use for the supplied driver
-// configuration and provider registry.
-//
-// Parameters:
-//   - parameters: the Oracle driver configuration to inspect.
-//   - providerRegistry: the provider registry available to token-based authentication.
-//
-// Returns:
-//   - the authenticator matching the supplied configuration.
-//   - an error if no suitable authenticator can be created.
-func GetAuthenticator(parameters *oracleconfig.OracleDriverConfig, providerRegistry common.Registry[oracleProviders.Provider]) (Authenticator, error) {
-	common.Odl.Debug("New authenticator requested for", "parameters", parameters)
-
-	if parameters == nil {
-		// this should never happen
-		return nil, common.NewOracleError(oracleErrors.InternalError, nil)
-	}
-
-	if len(parameters.Credentials.User) > 0 {
-		if len(parameters.Credentials.Password) > 0 {
-			return createPasswordAuthenticator(parameters)
-		}
-	} else {
-		if len(parameters.Credentials.Password) > 0 {
-			// if there is a password but no username
-			return nil, common.NewOracleError(oracleErrors.EmptyUsernameError, nil, nil)
-		}
-		provider, err := providerRegistry.Get(reflect.TypeOf((*oracleProviders.TokenAuthenticationProvider)(nil)).Elem())
-		if err != nil {
-			return nil, common.NewOracleError(oracleErrors.NoAuthenticatorError, err, nil)
-		}
-		if provider != nil {
-			tokenProvider := provider.(oracleProviders.TokenAuthenticationProvider)
-			return newTokenAuthenticator(tokenProvider), nil
-		}
-
-	}
-	return nil, common.NewOracleError(oracleErrors.NoAuthenticatorError, nil, nil)
-}
-
-func createPasswordAuthenticator(parameters *oracleconfig.OracleDriverConfig) (Authenticator, error) {
-	if len(parameters.Credentials.LogonMode) > 0 {
-		var mode, _ = common.GetLogonModeFromString(parameters.Credentials.LogonMode)
-		common.Odl.Debug(fmt.Sprintf("logonMode set to [%s]", mode))
-		return newPasswordAuthenticatorWithLogonMode(parameters.Credentials.User,
-			parameters.Credentials.Password,
-			mode,
-			parameters.ConnectDescriptor), nil
-	}
-	return newPasswordAuthenticator(parameters.Credentials.User,
-		parameters.Credentials.Password,
-		parameters.ConnectDescriptor), nil
-}
-
 // *** Negotiator Factory ***
 
 // GetNegotiator returns the default Negotiator implementation.
@@ -146,4 +90,90 @@ func GetNegotiator(transport driverCommon.DataBuffer, mode driverCommon.Connecti
 	}
 
 	return n
+}
+
+// *** Authenticator Factory ***
+
+// GetAuthenticator selects the authenticator to use for the supplied driver
+// configuration and provider registry.
+//
+// Parameters:
+//   - parameters: the Oracle driver configuration to inspect.
+//   - providerRegistry: the provider registry available to token-based authentication.
+//
+// Returns:
+//   - the authenticator matching the supplied configuration.
+//   - an error if no suitable authenticator can be created.
+func GetAuthenticator(parameters *oracleconfig.OracleDriverConfig, providerRegistry common.Registry[oracleProviders.Provider], mode driverCommon.ConnectionMode) (Authenticator, error) {
+	common.Odl.Debug("New authenticator requested for", "parameters", parameters)
+
+	if parameters == nil {
+		// this should never happen
+		return nil, common.NewOracleError(oracleErrors.InternalError, nil)
+	}
+
+	if len(parameters.Credentials.User) > 0 {
+		if len(parameters.Credentials.Password) > 0 {
+
+			return createPasswordAuthenticator(parameters, mode)
+		}
+	} else {
+		if len(parameters.Credentials.Password) > 0 {
+			// if there is a password but no username
+			return nil, common.NewOracleError(oracleErrors.EmptyUsernameError, nil, nil)
+		}
+		provider, err := providerRegistry.Get(reflect.TypeOf((*oracleProviders.TokenAuthenticationProvider)(nil)).Elem())
+		if err != nil {
+			return nil, common.NewOracleError(oracleErrors.NoAuthenticatorError, err, nil)
+		}
+		if provider != nil {
+			tokenProvider := provider.(oracleProviders.TokenAuthenticationProvider)
+			switch mode {
+			case driverCommon.ConnectionCookie:
+				return newCookieTokenAuthenticator(tokenProvider), nil
+			case driverCommon.ConnectionNormal, driverCommon.ConnectionRenegotiate:
+				return newTokenAuthenticator(tokenProvider), nil
+			}
+		}
+
+	}
+	return nil, common.NewOracleError(oracleErrors.NoAuthenticatorError, nil, nil)
+}
+
+func createPasswordAuthenticator(parameters *oracleconfig.OracleDriverConfig, connectionMode driverCommon.ConnectionMode) (Authenticator, error) {
+	hasLogonMode := len(parameters.Credentials.LogonMode) > 0
+	var logonMode common.LogonMode
+	if hasLogonMode {
+		var err error
+		logonMode, err = common.GetLogonModeFromString(parameters.Credentials.LogonMode)
+		if err != nil {
+			return nil, err
+		}
+		common.Odl.Debug(fmt.Sprintf("logonMode set to [%s]", logonMode))
+	}
+
+	switch connectionMode {
+	case driverCommon.ConnectionCookie:
+		if hasLogonMode {
+			return newCookiePasswordAuthenticatorWithLogonMode(parameters.Credentials.User,
+				parameters.Credentials.Password,
+				logonMode,
+				parameters.ConnectDescriptor), nil
+		}
+		return newCookiePasswordAuthenticator(parameters.Credentials.User,
+			parameters.Credentials.Password,
+			parameters.ConnectDescriptor), nil
+	case driverCommon.ConnectionNormal, driverCommon.ConnectionRenegotiate:
+		if hasLogonMode {
+			return newPasswordAuthenticatorWithLogonMode(parameters.Credentials.User,
+				parameters.Credentials.Password,
+				logonMode,
+				parameters.ConnectDescriptor), nil
+		}
+		return newPasswordAuthenticator(parameters.Credentials.User,
+			parameters.Credentials.Password,
+			parameters.ConnectDescriptor), nil
+	default:
+		return nil, common.NewOracleError(oracleErrors.InternalError, nil)
+	}
 }

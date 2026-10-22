@@ -80,6 +80,7 @@ var TestEnvironement TestingEnvironment
 var TestingConfig *TestConfig
 
 var testCases = []oracleTest.CategorizedTestCase{
+	{Name: "TestCookieAuthenticationResponses", Categories: "unitary", Exclusive: false, Fn: TestCookieAuthenticationResponses},
 	{Name: "TestCookieNegotiationQueuesMessages", Categories: "unitary", Exclusive: false, Fn: TestCookieNegotiationQueuesMessages},
 	{Name: "TestGetConnectionUsesInjectedCookieCache", Categories: "unitary", Exclusive: false, Fn: TestGetConnectionUsesInjectedCookieCache},
 	{Name: "TestTTICookieMarshalWire", Categories: "unitary", Exclusive: false, Fn: TestTTICookieMarshalWire},

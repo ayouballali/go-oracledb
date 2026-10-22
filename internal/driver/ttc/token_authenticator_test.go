@@ -216,7 +216,7 @@ func TestGetAuthenticator_SelectionLogic(t *testing.T) {
 			cfg.Credentials.User = tt.user
 			cfg.Credentials.Password = tt.password
 
-			authenticator, err := GetAuthenticator(cfg, tt.provider)
+			authenticator, err := GetAuthenticator(cfg, tt.provider, driverCommon.ConnectionNormal)
 
 			if tt.wantErrorCode != "" {
 				if err == nil {
@@ -262,6 +262,7 @@ func TestGetAuthenticator_UsesTokenAuthenticatorForSignedToken(t *testing.T) {
 			mockTokenAuthenticationProvider: mockTokenAuthenticationProvider{token: "token-value"},
 		},
 	),
+		driverCommon.ConnectionNormal,
 	)
 	if err != nil {
 		t.Fatalf("GetAuthenticator returned error: %v", err)
@@ -283,6 +284,7 @@ func TestGetAuthenticator_UsesTokenAuthenticatorForOAuth(t *testing.T) {
 	authenticator, err := GetAuthenticator(cfg, newTestProviderRegistry(
 		mockTokenAuthenticationProvider{token: "token-value"},
 	),
+		driverCommon.ConnectionNormal,
 	)
 	if err != nil {
 		t.Fatalf("GetAuthenticator returned error: %v", err)

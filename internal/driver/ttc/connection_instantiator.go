@@ -77,6 +77,7 @@ func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns dr
 		return GetAuthenticator(
 			config,
 			providerRegistry,
+			mode,
 		)
 	}
 
