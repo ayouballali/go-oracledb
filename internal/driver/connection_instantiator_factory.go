@@ -48,7 +48,26 @@ import (
 
 // GetConnectionInstantiator returns the correct connection instantiator
 // according to the configuration
-func GetConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider]) (driverCommon.ConnectionInstantiator, error) {
+func GetConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], reneg bool) (driverCommon.ConnectionInstantiator, error) {
 	// Get the correct connection instantiator depending on the configuration. For now we only support TTC
+	databaseUUID := ns.GetDatabaseUUID()
+	if reneg {
+		// normal with reng flag
+		return ttc.NewTTCConnectionInstantiator(config, ns, providerRegistry, driverCommon.ConnectionRenegotiate)
+	}
+
+	if ttc.IsTTCCookieEligible(config.DriverProperties, databaseUUID) {
+		cookie, found := ttc.GetCachedTTCCookie(databaseUUID)
+		if found {
+			return ttc.NewTTCOptimizedConnectionInstantiator(
+				config,
+				ns,
+				providerRegistry,
+				cookie,
+			)
+		}
+	}
+
 	return ttc.NewTTCConnectionInstantiator(config, ns, providerRegistry, driverCommon.ConnectionNormal)
+
 }
