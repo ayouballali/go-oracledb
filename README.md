@@ -18,6 +18,7 @@ Oracle Database Driver for Go is a native Go driver for Go's [database/sql](http
   - JSON support returning JSON as `string`
   - BLOB support using prefetch and returning `[]byte`
   - CLOB support using prefetch and returning `string`
+  - TTC cookie optimization for new physical connections; see [configuration and connection flows](documentation/ttc_cookie_optimization.md)
 
 ## Installation
 Run:
