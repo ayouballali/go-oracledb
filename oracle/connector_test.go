@@ -84,6 +84,10 @@ type mockConnectorNetworkSession struct {
 	inband           bool
 }
 
+func (m *mockConnectorNetworkSession) GetDatabaseUUID() string {
+	return ""
+}
+
 func (m *mockConnectorNetworkSession) Disconnect(ctx context.Context, flags int) error {
 	m.disconnectCalled = true
 	m.disconnectCtx = ctx

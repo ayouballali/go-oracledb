@@ -1118,6 +1118,11 @@ type mockNetworkSession struct {
 	inband          bool
 	remoteAddress   string
 	remotePort      int
+	databaseUUID    string
+}
+
+func (m *mockNetworkSession) GetDatabaseUUID() string {
+	return m.databaseUUID
 }
 
 // newTestConnection creates a connection without querying DBTIMEZONE. Tests that

@@ -151,6 +151,10 @@ func (ns *networkSession) GetRemotePort() int {
 	return remoteAddr.Port
 }
 
+func (ns *networkSession) GetDatabaseUUID() string {
+	return ns.sAtts.databaseUUID
+}
+
 func (ns *networkSession) getRemoteTCPAddr() *net.TCPAddr {
 	type remoteAddrProvider interface {
 		RemoteAddr() net.Addr
@@ -270,6 +274,18 @@ func (ns *networkSession) handleAccept(ctx context.Context, p *acceptPacket) err
 		acceptFlag2 := binary.BigEndian.Uint32(p.buf[NSPACFL2:])
 		ns.endOfRequestSupport = (acceptFlag2&TNS_ACCEPT_FLAG_HAS_END_OF_REQUEST != 0)
 		ns.supportsFastAuth = (acceptFlag2&TNS_ACCEPT_FLAG_FAST_AUTH != 0)
+	}
+
+	if ns.sAtts.version >= TNS_VERSION_MIN_END_OF_RESPONSE {
+		if len(p.buf) < NSPACUUIDLEN+TNS_UUID_OFFSET {
+			msg := fmt.Sprintf("Unexpected buffer length (%d) in accept packet", len(p.buf))
+			common.Odl.Warn(msg)
+			return common.NewOracleError(oracleErrors.InvalidNetworkContextExpectedLength, nil, "packet", "NSPTAC", len(p.buf), NSPACUUIDLEN+TNS_UUID_OFFSET)
+		}
+
+		// databaseUUID is a 16-byte ACCEPT field.
+		uuidBytes := p.buf[TNS_UUID_OFFSET : TNS_UUID_OFFSET+NSPACUUIDLEN]
+		ns.sAtts.databaseUUID = string(uuidBytes)
 	}
 
 	tlsadapter, ok := ns.ntAdapter.(interface {
