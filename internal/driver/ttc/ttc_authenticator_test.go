@@ -116,7 +116,8 @@ func TestPasswordAuthenticator_doOSESSKEY_Golden(t *testing.T) {
 	pa := newPasswordAuthenticator("username_test", "username_test",
 		"(DESCRIPTION=(ADDRESS=(HOST=localhost)(PORT=1521)(PROTOCOL=tcp))(CONNECT_DATA=(SERVICE_NAME=freepdb1)))")
 	pa.SetShelf(shelf)
-	pa.SetSessionContext(driverCommon.NewSessionContext())
+	sessCtx := driverCommon.NewSessionContext()
+	pa.SetSessionContext(sessCtx)
 
 	err := pa._doOSESSKEY(ctx)
 	if err != nil {
@@ -125,7 +126,7 @@ func TestPasswordAuthenticator_doOSESSKEY_Golden(t *testing.T) {
 
 	// Basic validations derived from the golden dump
 
-	sessionProperties := pa._sessionContext.GetSessionProperties()
+	sessionProperties := sessCtx.GetSessionProperties()
 	if v, _ := strconv.Atoi(string(sessionProperties.GetProperty(authPbkdf2VgenCount).(*driverCommon.KeyValue).Value)); v != 4096 {
 		t.Errorf("PBKDF2VgenCount = %d, want 4096", v)
 	}
@@ -145,6 +146,7 @@ func TestPasswordAuthenticator_doOSESSKEY_Golden(t *testing.T) {
 // 1) Build an oSesskeyRPA by unmarshalling the golden dump.
 // 2) Seed the incoming wire with TTIRPA + golden oAuth RPA payload.
 // 3) Run _doOAuth to assert marshalling/unmarshalling works end-to-end.
+// TODO: Move this shared OAUTH test to password_authenticator_setup_test.go.
 func TestPasswordAuthenticator_doOAuth_Golden(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -178,9 +180,10 @@ func TestPasswordAuthenticator_doOAuth_Golden(t *testing.T) {
 		"username_test",
 		"(DESCRIPTION=(ADDRESS=(HOST=localhost)(PORT=1521)(PROTOCOL=tcp))(CONNECT_DATA=(SERVICE_NAME=freepdb1)))")
 	pa.SetShelf(shelf)
-	pa.SetSessionContext(driverCommon.NewSessionContext())
-	pa._sessionContext.UpdateSessionProperties(osrpaMsg.(*oSesskeyRPA).connectionValues)
-	if err := pa._doOAuth(ctx); err != nil {
+	sessCtx := driverCommon.NewSessionContext()
+	pa.SetSessionContext(sessCtx)
+	sessCtx.UpdateSessionProperties(osrpaMsg.(*oSesskeyRPA).connectionValues)
+	if err := pa.setup._doOAuth(ctx); err != nil {
 		sqlError, ok := err.(oracleErrors.SQLError)
 		if !ok {
 			t.Fatalf("expected error to be SQLError")
