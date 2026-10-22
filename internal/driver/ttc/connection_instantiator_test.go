@@ -129,17 +129,19 @@ func TestGetConnection(t *testing.T) {
 				DriverProperties: oracleconfig.OracleDriverProperties{},
 			}
 			ci := &connectionInstantiator{
-				negotiator: &mockNegotiator{
-					sessCtx: driverCommon.NewSessionContext(),
-					shelf:   shelf,
-					err:     tt.negotiatorErr,
-				},
-				authenticator:       &mockAuthenticator{err: tt.authErr},
-				ns:                  ns,
-				drvierConfig:        oracleconfig,
-				localizationService: common.NewLocalizationService(language.English),
-				newConnectionFunc: func(_ context.Context, shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, ns driverCommon.NetworkSession) (*connection, error) {
-					return newTestConnection(shelf, sessCtx, ns), nil
+				instantiatorSetup: &ConnectionInstantiatorSetup{
+					negotiator: &mockNegotiator{
+						sessCtx: driverCommon.NewSessionContext(),
+						shelf:   shelf,
+						err:     tt.negotiatorErr,
+					},
+					authenticator:       &mockAuthenticator{err: tt.authErr},
+					ns:                  ns,
+					drvierConfig:        oracleconfig,
+					localizationService: common.NewLocalizationService(language.English),
+					newConnectionFunc: func(_ context.Context, shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, ns driverCommon.NetworkSession) (*connection, error) {
+						return newTestConnection(shelf, sessCtx, ns), nil
+					},
 				},
 			}
 
@@ -189,17 +191,19 @@ func TestGetConnectionMissingLocalizationService(t *testing.T) {
 	}
 
 	ci := &connectionInstantiator{
-		negotiator: &mockNegotiator{
-			sessCtx: driverCommon.NewSessionContext(),
-			shelf:   shelf,
+		instantiatorSetup: &ConnectionInstantiatorSetup{
+			negotiator: &mockNegotiator{
+				sessCtx: driverCommon.NewSessionContext(),
+				shelf:   shelf,
+			},
+			authenticator: &mockAuthenticator{},
+			ns:            &mockNetworkSession{},
+			newConnectionFunc: func(_ context.Context, shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, ns driverCommon.NetworkSession) (*connection, error) {
+				return newTestConnection(shelf, sessCtx, ns), nil
+			},
+			drvierConfig:        oracleconfig,
+			localizationService: nil,
 		},
-		authenticator: &mockAuthenticator{},
-		ns:            &mockNetworkSession{},
-		newConnectionFunc: func(_ context.Context, shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, ns driverCommon.NetworkSession) (*connection, error) {
-			return newTestConnection(shelf, sessCtx, ns), nil
-		},
-		drvierConfig:        oracleconfig,
-		localizationService: nil,
 	}
 
 	conn, err := ci.GetConnection(ctx)
