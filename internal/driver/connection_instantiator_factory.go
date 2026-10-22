@@ -50,5 +50,5 @@ import (
 // according to the configuration
 func GetConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider]) (driverCommon.ConnectionInstantiator, error) {
 	// Get the correct connection instantiator depending on the configuration. For now we only support TTC
-	return ttc.NewTTCConnectionInstantiator(config, ns, providerRegistry)
+	return ttc.NewTTCConnectionInstantiator(config, ns, providerRegistry, driverCommon.ConnectionNormal)
 }

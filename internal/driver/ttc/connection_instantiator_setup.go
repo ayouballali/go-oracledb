@@ -134,7 +134,16 @@ func createPasswordAuthenticator(parameters *oracleconfig.OracleDriverConfig) (A
 
 // GetNegotiator returns the default Negotiator implementation.
 // TODO : we should not have to pass the buffer here...
-func GetNegotiator(transport driverCommon.DataBuffer) Negotiator {
-	n := newConnectionNegotiator(transport)
+func GetNegotiator(transport driverCommon.DataBuffer, mode driverCommon.ConnectionMode, cookie *ttiCookie) Negotiator {
+	var n Negotiator
+	switch mode {
+	case driverCommon.ConnectionCookie:
+		n = newCookieConnectionNegotiator(transport, cookie)
+	case driverCommon.ConnectionNormal:
+		n = newConnectionNegotiator(transport, false)
+	case driverCommon.ConnectionRenegotiate:
+		n = newConnectionNegotiator(transport, true)
+	}
+
 	return n
 }

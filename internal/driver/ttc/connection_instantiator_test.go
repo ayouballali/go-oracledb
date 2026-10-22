@@ -129,6 +129,7 @@ func TestGetConnection(t *testing.T) {
 				DriverProperties: oracleconfig.OracleDriverProperties{},
 			}
 			ci := &connectionInstantiator{
+				cookieCache: common.NewSafeLRUCache[*ttiCookie](50),
 				instantiatorSetup: &ConnectionInstantiatorSetup{
 					negotiator: &mockNegotiator{
 						sessCtx: driverCommon.NewSessionContext(),
@@ -179,6 +180,47 @@ func TestGetConnection(t *testing.T) {
 	}
 }
 
+func TestGetConnectionUsesInjectedCookieCache(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	const databaseUUID = "test-database-uuid"
+	cookie := &ttiCookie{connectionProtocolVersion: 6}
+	cache := common.NewSafeLRUCache[*ttiCookie](50)
+	shelf := newShelf[driverCommon.MessageType]()
+	shelf.RegisterMessageStreamer(&mockStreamer{pullMsg: &mockOer{err: nil}})
+	shelf.RegisterMessageFactory(&mockFactory{returnMsg: NewOall18()})
+	ns := &mockNetworkSession{databaseUUID: databaseUUID}
+
+	ci := &connectionInstantiator{
+		cookieCache: cache,
+		instantiatorSetup: &ConnectionInstantiatorSetup{
+			negotiator: &mockNegotiator{
+				sessCtx: driverCommon.NewSessionContext(),
+				shelf:   shelf,
+				cookie:  cookie,
+			},
+			authenticator: &mockAuthenticator{},
+			ns:            ns,
+			drvierConfig: &oracleconfig.OracleDriverConfig{
+				DriverProperties: oracleconfig.OracleDriverProperties{
+					TTCCookieOptimizationEnabled: true,
+				},
+			},
+			localizationService: common.NewLocalizationService(language.English),
+			newConnectionFunc: func(_ context.Context, shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, ns driverCommon.NetworkSession) (*connection, error) {
+				return newTestConnection(shelf, sessCtx, ns), nil
+			},
+		},
+	}
+
+	if _, err := ci.GetConnection(ctx); err != nil {
+		t.Fatalf("GetConnection returned error: %v", err)
+	}
+	if cached, found := cache.Get(databaseUUID); !found || cached != cookie {
+		t.Fatalf("injected cache contains %p, found=%t; want negotiated cookie %p", cached, found, cookie)
+	}
+}
+
 func TestGetConnectionMissingLocalizationService(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -191,6 +233,7 @@ func TestGetConnectionMissingLocalizationService(t *testing.T) {
 	}
 
 	ci := &connectionInstantiator{
+		cookieCache: common.NewSafeLRUCache[*ttiCookie](50),
 		instantiatorSetup: &ConnectionInstantiatorSetup{
 			negotiator: &mockNegotiator{
 				sessCtx: driverCommon.NewSessionContext(),

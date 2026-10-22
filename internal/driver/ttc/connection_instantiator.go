@@ -51,6 +51,7 @@ import (
 
 type connectionInstantiator struct {
 	instantiatorSetup *ConnectionInstantiatorSetup
+	cookieCache       *common.SafeLRUCache[*ttiCookie]
 }
 
 // NewTTCConnectionInstantiator creates a new TTC connection instantiator.
@@ -63,11 +64,13 @@ type connectionInstantiator struct {
 // Returns:
 //   - the TTC connection instantiator bound to ns.
 //   - an error if the authenticator or instantiator cannot be initialized.
-func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider]) (driverCommon.ConnectionInstantiator, error) {
+func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], mode driverCommon.ConnectionMode) (driverCommon.ConnectionInstantiator, error) {
 
 	createNegotiator := func(buffer driverCommon.DataBuffer) Negotiator {
 		return GetNegotiator(
 			buffer,
+			mode,
+			nil,
 		)
 	}
 	createAuthenticator := func() (Authenticator, error) {
@@ -85,6 +88,7 @@ func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns dr
 
 	return &connectionInstantiator{
 		instantiatorSetup: instantiatorSetup,
+		cookieCache:       databaseNegotiatedInformation,
 	}, nil
 }
 
@@ -101,15 +105,19 @@ func (connInstantiator *connectionInstantiator) GetConnection(ctx context.Contex
 	setup := connInstantiator.instantiatorSetup
 	negotiator := connInstantiator.instantiatorSetup.negotiator
 	authenticator := connInstantiator.instantiatorSetup.authenticator
+	databaseUUID := setup.ns.GetDatabaseUUID()
 
 	if setup.localizationService == nil {
 		return nil, common.NewOracleError(oracleErrors.MissingLocalizationService, nil)
 	}
 
 	// Perform wire negotiation; capture session context, shelf and capability
-	sessCtx, shelf, err := negotiator.Negotiate(ctx)
+	sessCtx, shelf, cookie, err := negotiator.Negotiate(ctx)
 	if err != nil {
 		return nil, setup.localizationService.LocalizeError(err)
+	}
+	if IsTTCCookieEligible(setup.drvierConfig.DriverProperties, databaseUUID) {
+		connInstantiator.cookieCache.Put(databaseUUID, cookie)
 	}
 
 	setup.PrepareForAuthetication(sessCtx, shelf)

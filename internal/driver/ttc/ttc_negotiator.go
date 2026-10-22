@@ -50,21 +50,23 @@ import (
 // connectionNegotiator implements the Negotiator interface for TTC connections.
 type connectionNegotiator struct {
 	negotiationSetup *negotiationSetup
+	reneg            bool
 }
 
 // newConnectionNegotiator creates a new instance of connectionNegotiator.
-func newConnectionNegotiator(buf driverCommon.DataBuffer) *connectionNegotiator {
+func newConnectionNegotiator(buf driverCommon.DataBuffer, reneg bool) *connectionNegotiator {
 	negotiation := &negotiationSetup{
 		_dataBuffer: buf,
 	}
 
 	return &connectionNegotiator{
 		negotiationSetup: negotiation,
+		reneg:            reneg,
 	}
 }
 
 // Negotiate performs the connection negotiation process over the provided DataBuffer.
-func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.SessionContext, *ttiShelf[driverCommon.MessageType], error) {
+func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.SessionContext, *ttiShelf[driverCommon.MessageType], *ttiCookie, error) {
 	var pro *tTIpro
 	var dty *tTIdty
 	negoSetup := cn.negotiationSetup
@@ -73,10 +75,14 @@ func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.Se
 
 	// 4. Negotiate Protocol
 	var err error
-	pro, err = cn._negotiateProtocol(ctx, msgStmr, msgfactory)
+	if cn.reneg {
+		pro, err = cn._receiveTtiPro(ctx, msgStmr)
+	} else {
+		pro, err = cn._negotiateProtocol(ctx, msgStmr, msgfactory)
+	}
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// 5. Register negotiated server capabilities
@@ -85,14 +91,15 @@ func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.Se
 	// 6. Negotiate Datatype
 	dty, err = cn._negotiateDatatype(ctx, msgStmr, msgfactory, pro)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	negoSetup.configureNegotiation(shelf, sessCtx, pro, dty)
 	// set timezone version number in session context
 	sessCtx.SetTimeZoneVersionNumber(dty.GetTimeZoneVersionNumber())
 	common.Odl.Fine("connectionNegotiator: Negotiation complete", "SessionContext", sessCtx, "Shelf", shelf)
-	return sessCtx, shelf, nil
+	cookie := newTTICookieFromTTIpro(pro)
+	return sessCtx, shelf, cookie, nil
 }
 
 // SetDataBuffer Sets the data buffer used to create the marshaler within the negotiator

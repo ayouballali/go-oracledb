@@ -252,7 +252,7 @@ func TestConnectionNegotiator_Negotiate_Fail(t *testing.T) {
 				failWhere: tc.failWhere,
 				failErr:   errors.New(tc.expectedErr),
 			}
-			negotiator := newConnectionNegotiator(nil)
+			negotiator := newConnectionNegotiator(nil, false)
 			var err error
 			switch tc.step {
 			case stepProtocol:
@@ -404,8 +404,8 @@ func TestConnectionNegotiator_Negotiate_Success(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
 			data := tc.buffer()
-			negotiator := newConnectionNegotiator(data)
-			sessCtx, shelf, err := negotiator.Negotiate(ctx)
+			negotiator := newConnectionNegotiator(data, false)
+			sessCtx, shelf, _, err := negotiator.Negotiate(ctx)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -425,9 +425,9 @@ func TestConnectionNegotiator_Negotiate_Success(t *testing.T) {
 func TestConnectionNegotiator_Negotiate_SelectsEOCSMessages(t *testing.T) {
 	data := NewTestDataBuffer()
 	data.OnWriteDefaults = successOnWriteEOCS(6)
-	negotiator := newConnectionNegotiator(data)
+	negotiator := newConnectionNegotiator(data, false)
 
-	_, shelf, err := negotiator.Negotiate(context.Background())
+	_, shelf, _, err := negotiator.Negotiate(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -80,6 +80,8 @@ var TestEnvironement TestingEnvironment
 var TestingConfig *TestConfig
 
 var testCases = []oracleTest.CategorizedTestCase{
+	{Name: "TestCookieNegotiationQueuesMessages", Categories: "unitary", Exclusive: false, Fn: TestCookieNegotiationQueuesMessages},
+	{Name: "TestGetConnectionUsesInjectedCookieCache", Categories: "unitary", Exclusive: false, Fn: TestGetConnectionUsesInjectedCookieCache},
 	{Name: "TestTTICookieMarshalWire", Categories: "unitary", Exclusive: false, Fn: TestTTICookieMarshalWire},
 	{Name: "TestTTICookieSnapshotIsolation", Categories: "unitary", Exclusive: false, Fn: TestTTICookieSnapshotIsolation},
 	{Name: "TestTTICookieEligibility", Categories: "unitary", Exclusive: false, Fn: TestTTICookieEligibility},
@@ -1178,13 +1180,14 @@ func (m *mockNetworkSession) Disconnect(ctx context.Context, flags int) error {
 type mockNegotiator struct {
 	sessCtx         *common.SessionContext
 	shelf           *ttiShelf[common.MessageType]
+	cookie          *ttiCookie
 	err             error
 	negotiateCalled bool
 }
 
-func (m *mockNegotiator) Negotiate(ctx context.Context) (*common.SessionContext, *ttiShelf[common.MessageType], error) {
+func (m *mockNegotiator) Negotiate(ctx context.Context) (*common.SessionContext, *ttiShelf[common.MessageType], *ttiCookie, error) {
 	m.negotiateCalled = true
-	return m.sessCtx, m.shelf, m.err
+	return m.sessCtx, m.shelf, m.cookie, m.err
 }
 
 // *** Authenticator ***

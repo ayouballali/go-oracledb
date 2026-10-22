@@ -47,6 +47,14 @@ const (
 	NSFIMM = 0x0040 // non graceful disconnect
 )
 
+type ConnectionMode uint8
+
+const (
+	ConnectionNormal ConnectionMode = iota
+	ConnectionRenegotiate
+	ConnectionCookie
+)
+
 // NetworkSession implementors can disconnect a network connection
 type NetworkSession interface {
 	// Disconnect disconnects the network connection

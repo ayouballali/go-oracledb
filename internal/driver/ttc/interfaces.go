@@ -71,7 +71,7 @@ type Negotiator interface {
 	//  - a shelf that host connection common assets
 	//  - error in case of failure
 	Negotiate(context.Context) (*common.SessionContext,
-		*ttiShelf[common.MessageType], error)
+		*ttiShelf[common.MessageType], *ttiCookie, error)
 }
 
 // codecFactoryUser identifies messages that require protocol-matched codecs.
