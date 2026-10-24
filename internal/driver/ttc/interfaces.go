@@ -69,6 +69,7 @@ type Negotiator interface {
 	// returns:
 	//  - a session context initialized for the remote server
 	//  - a shelf that host connection common assets
+	//  - a cookie containing negotiated values, or nil for the cookie path
 	//  - error in case of failure
 	Negotiate(context.Context) (*common.SessionContext,
 		*ttiShelf[common.MessageType], *ttiCookie, error)

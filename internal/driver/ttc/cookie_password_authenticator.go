@@ -80,6 +80,7 @@ func (pa *cookiePasswordAuthenticator) Authenticate(ctx context.Context) error {
 		common.Odl.Warn("Authentication failed, oauth keys exchange failed", "error", err)
 		return common.NewOracleError(oracleErrors.AuthenticatorError, err, nil)
 	}
+	common.Odl.Fine("cookiePasswordAuthenticator: Authentication complete")
 	return nil
 }
 

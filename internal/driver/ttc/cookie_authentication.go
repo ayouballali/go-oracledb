@@ -8,6 +8,8 @@ import (
 	oracleErrors "github.com/oracle/go-oracledb/v26/oracle/errors"
 )
 
+// readCookieAuthenticationResponse reads the combined negotiation and first
+// authentication response. TTIRENEG requests fallback; it does not retry here.
 func readCookieAuthenticationResponse(
 	ctx context.Context,
 	shelf *ttiShelf[driverCommon.MessageType],
@@ -17,7 +19,7 @@ func readCookieAuthenticationResponse(
 	var rpa driverCommon.Message[driverCommon.MessageType] = nil
 
 	createAuthenticationRPA := func(t *messageHeader) (driverCommon.Message[driverCommon.MessageType], error) {
-		common.Odl.Fine("Inside oauthRPACallBack hdr", "msg", t.GetType())
+		common.Odl.Fine("Cookie authentication: Creating RPA response", "function", funcType, "messageType", t.GetType())
 		msg, err := shelf.GetMessageFactory().(Factory).GetMessageForFunction(TTIRPA, funcType)
 		if err != nil {
 			return nil, err
@@ -38,7 +40,7 @@ func readCookieAuthenticationResponse(
 		switch msg.GetMsgCode() {
 		case TTIRPA:
 			rpa = msg
-			common.Odl.Fine("Authenticator:", "oAuth-RPA", rpa)
+			common.Odl.Fine("Cookie authentication: RPA received", "function", funcType)
 		case TTIOER:
 			ttioer := msg.(tTIOerIface)
 			err := ttioer.getError()
@@ -50,11 +52,14 @@ func readCookieAuthenticationResponse(
 		case TTIWRN:
 			logAuthenticationWarning(msg.(*tTIwrn))
 		case TTIDTY:
+			// Negotiation callbacks handled this response; continue reading authentication.
 		case TTIPRO:
+			// The streamer decoded this negotiation response; continue reading authentication.
 		case TTIRENEG:
+			common.Odl.Fine("Cookie authentication: Server requested TTC renegotiation", "function", funcType)
 			return nil, driverCommon.ErrTTIRENEG
 		default:
-			common.Odl.Warn("Unexpected message type during oauthMsg", "message", msg)
+			common.Odl.Warn("Unexpected message type during cookie authentication", "function", funcType, "messageType", msg.GetMsgCode())
 			return nil, common.NewOracleError(oracleErrors.InternalError, err, nil)
 		}
 	}

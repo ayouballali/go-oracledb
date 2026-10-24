@@ -3,6 +3,7 @@ package ttc
 import (
 	"context"
 
+	"github.com/oracle/go-oracledb/v26/internal/common"
 	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
 )
 
@@ -48,6 +49,7 @@ func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommo
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	common.Odl.Fine("cookieConnectionNegotiator: TTIPRO, TTICOOKIE, and TTIDTY queued for the first authentication request")
 
 	shared.applyNegotiatedSettings(shelf, sessCtx, pro, dty)
 
@@ -65,9 +67,13 @@ func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommo
 		}
 		dty := msg.(*tTIdty)
 		sessCtx.SetTimeZoneVersionNumber(dty.GetTimeZoneVersionNumber())
+		common.Odl.Fine("cookieConnectionNegotiator: Cookie datatype negotiation completed", "timeZoneVersion", dty.GetTimeZoneVersionNumber())
 
 		return true, nil
 	}
+	// DTY arrives during authentication, after Negotiate returns. Prepare its
+	// client capabilities before decoding and apply the returned timezone version
+	// afterward. The cookie instantiator removes these callbacks when setup ends.
 	msgStmr.RegisterPostUnmarshallCallback(TTIDTY, updateTimeZoneVersion)
 	msgStmr.RegisterPreUnmarshallCallback(TTIDTY, prepareDTYResponse)
 

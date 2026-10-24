@@ -38,6 +38,9 @@ func (shared *connectionNegotiatorCommon) applyNegotiatedSettings(shelf *ttiShel
 		pro.getNCharCharacterSet(),
 	)
 
+	// Both marshallers were registered in step 2; message type selects the encoding.
+	// No marshaller replacement is needed after datatype negotiation.
+
 	// Determine negotiated TTC version (minimum of client and server)
 	clientVersion := dty.GetClientTTCVersion()
 	serverVersion := shelf.GetCapabilities()[kpccapCtTtcFldVsn].Value
@@ -50,11 +53,9 @@ func (shared *connectionNegotiatorCommon) applyNegotiatedSettings(shelf *ttiShel
 	// 7. Update Version based MessageFactory
 	_ = _createAndRegisterMessageFactory(shelf, int8(negotiatedTTCVersion))
 
-	common.Odl.Fine("connectionNegotiator: Negotiation complete", "SessionContext", sessCtx, "Shelf", shelf)
-
 	_createAndRegisterCodecFactory(shelf, int8(negotiatedTTCVersion))
 
-	common.Odl.Fine("connectionNegotiator: Negotiation complete", "SessionContext", sessCtx, "Shelf", shelf)
+	common.Odl.Fine("connectionNegotiator: Negotiated client settings applied")
 }
 
 // _createShelfAndSessionContext manages creation of Shelf and SessionContext.

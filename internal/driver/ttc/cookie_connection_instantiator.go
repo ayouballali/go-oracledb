@@ -52,13 +52,16 @@ func (ci *cookieConnectionInstantiator) GetConnection(ctx context.Context) (driv
 		return nil, common.NewOracleError(oracleErrors.MissingLocalizationService, nil)
 	}
 
-	// Perform wire negotiation; capture session context, shelf and capability
+	// Queue cookie negotiation messages and prepare the cached session settings.
+	// The authenticator sends and reads the combined exchange.
 	sessCtx, shelf, _, err := negotiator.Negotiate(ctx)
 	if err != nil {
 		return nil, shared.localizationService.LocalizeError(err)
 	}
 
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
+	// Negotiation callbacks must remain available until authentication finishes,
+	// including when authentication returns an error or requests fallback.
 	defer unregisterCookieNegotiationCallbacks(streamer)
 
 	shared.PrepareForAuthentication(sessCtx, shelf)

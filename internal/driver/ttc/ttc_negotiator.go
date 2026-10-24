@@ -76,6 +76,8 @@ func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.Se
 	// 4. Negotiate Protocol
 	var err error
 	if cn.serverProtocolPending {
+		// After TTIRENEG the server's replacement TTIPRO is already pending;
+		// consume it without sending another client protocol request.
 		pro, err = cn.receiveProtocolResponse(ctx, msgStmr)
 	} else {
 		pro, err = cn._negotiateProtocol(ctx, msgStmr, msgfactory)

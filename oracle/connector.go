@@ -214,6 +214,8 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	}
 	connection, err := connInstantiator.GetConnection(ctx)
 	if errors.Is(err, driverCommon.ErrTTIRENEG) {
+		// Retry connection establishment once on the same network session.
+		common.OdlT(sessionUid).Fine("TTC cookie rejected; falling back to normal negotiation on the same network session")
 		connInstantiator, err = c.connInstantiatorFactory(c.connectorConfig, ns, c.providerRegistry, true)
 		if err != nil {
 			e := common.NewOracleError(oracleErrors.ConnectFailed, err)
