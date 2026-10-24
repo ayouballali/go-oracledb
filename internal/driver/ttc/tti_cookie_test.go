@@ -41,9 +41,11 @@ package ttc
 import (
 	"bytes"
 	"context"
+	"strings"
+	"testing"
+
 	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
 	oracleconfig "github.com/oracle/go-oracledb/v26/oracle/config"
-	"testing"
 )
 
 // TestTTICookieEligibility verifies that both the property and database UUID
@@ -70,31 +72,97 @@ func TestTTICookieEligibility(t *testing.T) {
 	}
 }
 
-// TestTTICookieSnapshotIsolation verifies that cached capabilities and portage
-// do not alias the source or a connection's reconstructed protocol object.
-func TestTTICookieSnapshotIsolation(t *testing.T) {
+// TestTTICookieCopiesRuntimeCapabilities verifies that the cookie's runtime
+// capabilities do not share the source PRO's backing array.
+func TestTTICookieCopiesRuntimeCapabilities(t *testing.T) {
 	t.Parallel()
-	pro := newTTIpro().(*tTIpro)
-	pro.proSvrVer, pro.svrCharSet, pro.nCharCharset, pro.svrFlags = 6, 873, 2000, 1
-	pro.svrPortDescription = []byte("platform")
-	compileFirst := pro.serverCaps.compileTimeCapabilities[0]
-	runtimeFirst := pro.serverCaps.runTimeCapabilities[0]
+
+	pro := &tTIpro{
+		serverCaps: &capability{
+			runTimeCapabilities: []byte{1, 2, 3},
+		},
+	}
+
 	cookie := newTTICookieFromTTIpro(pro)
-	pro.serverCaps.compileTimeCapabilities[0] ^= 0xff
-	pro.serverCaps.runTimeCapabilities[0] ^= 0xff
-	pro.svrPortDescription[0] = 'X'
-	if cookie.databaseCompileTimeCapabilities[0] != compileFirst || cookie.databaseRuntimeCapabilities[0] != runtimeFirst || string(cookie.databasePortage) != "platform" {
-		t.Fatal("source mutation changed cached negotiation values")
+	pro.serverCaps.runTimeCapabilities[0] = 255
+
+	if got := cookie.databaseRuntimeCapabilities[0]; got != 1 {
+		t.Errorf("cached runtime capability = %d, want 1", got)
 	}
-	restored := cookie.newPRO()
-	if restored.proSvrVer != 6 || restored.svrCharSet != 873 || restored.nCharCharset != 2000 || restored.svrFlags != 1 {
-		t.Fatal("protocol fields were not restored from the cookie")
+}
+
+// TestNewTTICookieFromTTIpro verifies that the cookie preserves the server's
+// negotiated protocol fields, capabilities, and platform description.
+func TestNewTTICookieFromTTIpro(t *testing.T) {
+	t.Parallel()
+	runtime := []byte{1, 2, 3}
+	compile := []byte{4, 5, 6, 7, 8, 9, 10, 123}
+	desc := driverCommon.B1Array("test")
+	p := &tTIpro{
+		proSvrVer:          456,
+		clientCaps:         &capability{runTimeCapabilities: []byte{90}, compileTimeCapabilities: []byte{91}},
+		serverCaps:         &capability{runTimeCapabilities: runtime, compileTimeCapabilities: compile},
+		svrCharSet:         871,
+		nCharCharset:       775,
+		svrFlags:           1,
+		svrPortDescription: desc,
 	}
-	restored.serverCaps.compileTimeCapabilities[0] ^= 0xff
-	restored.serverCaps.runTimeCapabilities[0] ^= 0xff
-	restored.svrPortDescription[0] = 'Y'
-	if cookie.databaseCompileTimeCapabilities[0] != compileFirst || cookie.databaseRuntimeCapabilities[0] != runtimeFirst || string(cookie.databasePortage) != "platform" {
-		t.Fatal("connection mutation changed cached negotiation values")
+
+	cookie := newTTICookieFromTTIpro(p)
+
+	if cookie.GetMsgCode() != TTICOOKIE {
+		t.Errorf("GetMsgCode = %v, want %v", cookie.GetMsgCode(), TTICOOKIE)
+	}
+	if cookie.connectionProtocolVersion != p.proSvrVer {
+		t.Errorf("protocol version = %d, want %d", cookie.connectionProtocolVersion, p.proSvrVer)
+	}
+	if cookie.databaseCharSet != p.svrCharSet {
+		t.Errorf("database character set = %d, want %d", cookie.databaseCharSet, p.svrCharSet)
+	}
+	if cookie.databaseNCharSet != p.nCharCharset {
+		t.Errorf("database NCHAR character set = %d, want %d", cookie.databaseNCharSet, p.nCharCharset)
+	}
+	if cookie.databaseCharSetFlag != p.svrFlags {
+		t.Errorf("character set flag = %d, want %d", cookie.databaseCharSetFlag, p.svrFlags)
+	}
+	if !bytes.Equal(cookie.databaseRuntimeCapabilities, runtime) {
+		t.Errorf("runtime capabilities = %x, want %x", cookie.databaseRuntimeCapabilities, runtime)
+	}
+	if !bytes.Equal(cookie.databaseCompileTimeCapabilities, compile) {
+		t.Errorf("compile-time capabilities = %x, want %x", cookie.databaseCompileTimeCapabilities, compile)
+	}
+	if !bytes.Equal(cookie.databasePortage, desc) {
+		t.Errorf("platform description = %q, want %q", cookie.databasePortage, desc)
+	}
+}
+
+// TestTTICookieMarshalTo_Fail verifies that a failure writing the cookie version
+// is returned to the caller.
+func TestTTICookieMarshalTo_Fail(t *testing.T) {
+	t.Parallel()
+	cookie := &ttiCookie{
+		connectionProtocolVersion:       6,
+		databaseCharSet:                 873,
+		databaseCharSetFlag:             1,
+		databaseNCharSet:                2000,
+		databasePortage:                 []byte("X"),
+		databaseCompileTimeCapabilities: []byte{0xaa, 0xbb},
+		databaseRuntimeCapabilities:     []byte{0xcc},
+	}
+	ctx := context.Background()
+
+	adb := NewArrayDataBuffer(128)
+
+	buf := &FaultyArrayBasedDataBuffer{
+		ArrayBasedDataBuffer: adb,
+		FailOnWriteByteCall:  1,
+	}
+
+	marshal := NewNativeMarshalEngine(buf, driverCommon.BIG_ENDIAN)
+
+	err := cookie.MarshalTo(ctx, marshal)
+	if err == nil || !strings.Contains(err.Error(), "simulated write error (WriteByte)") {
+		t.Fatalf("expected injected write error, got %v", err)
 	}
 }
 

@@ -102,7 +102,7 @@ func (c *ttiCookie) MarshalTo(ctx context.Context, mar driverCommon.Marshaller) 
 	if err := mar.MarshalUB1(ctx, driverCommon.UB1(c.databaseCharSetFlag)); err != nil {
 		return err
 	}
-	//todo here we are manually encoding using little endian we could get use of a helper or something
+
 	databaseNCharSetE := (uint16(c.databaseNCharSet)&0xFF)<<8 | (uint16(c.databaseNCharSet) >> 8)
 	if err := mar.MarshalUB2(ctx, driverCommon.UB2(databaseNCharSetE)); err != nil {
 		return err
@@ -157,6 +157,19 @@ func IsTTCCookieEligible(
 ) bool {
 	return properties.IsTTCCookieOptimizationEnabled() &&
 		strings.TrimSpace(databaseUUID) != ""
+}
+
+// SeedTTCCookieForTest inserts a cookie for factory-selection tests and returns
+// a cleanup function that removes the entry. The cookie is not intended
+// for a real negotiation. Tests must use a unique database UUID.
+func SeedTTCCookieForTest(databaseUUID string) func() {
+	databaseNegotiatedInformation.Put(
+		databaseUUID,
+		&ttiCookie{connectionProtocolVersion: 6},
+	)
+	return func() {
+		databaseNegotiatedInformation.Remove(databaseUUID)
+	}
 }
 
 // ClearTTCCookieCacheForTest resets cached TTC negotiation data for integration tests.

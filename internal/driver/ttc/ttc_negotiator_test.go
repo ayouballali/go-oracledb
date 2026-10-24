@@ -42,6 +42,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
 	"regexp"
 	"testing"
 
@@ -414,6 +415,86 @@ func TestConnectionNegotiator_Negotiate_Success(t *testing.T) {
 			}
 			if shelf == nil {
 				t.Error("Shelf is nil")
+			}
+		})
+	}
+}
+
+// TestConnectionNegotiator_Renegotiate_Success verifies that renegotiation
+// consumes the pending server PRO and sends only DTY, without another PRO request.
+func TestConnectionNegotiator_Renegotiate_Success(t *testing.T) {
+	t.Parallel()
+	data := NewTestDataBuffer()
+	if _, err := data.WriteBuf(DefaultTTIproSuccessPayload(6, true, true)); err != nil {
+		t.Fatalf("prepare pending PRO response: %v", err)
+	}
+	flushes := 0
+	data.OnFlush = func(buffer *TestDataBuffer) {
+		flushes++
+		written := buffer.buf.Bytes()
+		if len(written) == 0 || written[0] != byte(TTIDTY) {
+			t.Fatalf("outgoing negotiation bytes = %x, want DTY after consuming pending PRO", written)
+		}
+		// Reuse the buffered DTY as the response, as in the existing success tests.
+	}
+
+	negotiator := newConnectionNegotiator(data, true)
+	sessCtx, shelf, cookie, err := negotiator.Negotiate(context.Background())
+	if err != nil {
+		t.Fatalf("renegotiate: %v", err)
+	}
+	if flushes != 1 {
+		t.Fatalf("negotiation flushes = %d, want one DTY exchange", flushes)
+	}
+	if sessCtx == nil || shelf == nil || cookie == nil {
+		t.Fatal("renegotiation did not return session, shelf, and replacement cookie")
+	}
+	if cookie.connectionProtocolVersion != 6 || cookie.databaseCharSet != 871 {
+		t.Fatalf("replacement cookie protocol = %d, character set = %d; want 6 and 871",
+			cookie.connectionProtocolVersion, cookie.databaseCharSet)
+	}
+}
+
+// TestConnectionNegotiator_Renegotiate_Fail verifies that a failed PRO read
+// prevents the DTY exchange and that neither failure returns usable negotiation state.
+func TestConnectionNegotiator_Renegotiate_Fail(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name        string
+		pendingPRO  bool
+		wantFlushes int
+	}{
+		{name: "pending PRO read fails", wantFlushes: 0},
+		{name: "DTY read fails after PRO", pendingPRO: true, wantFlushes: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			data := NewTestDataBuffer()
+			if tc.pendingPRO {
+				if _, err := data.WriteBuf(DefaultTTIproSuccessPayload(6, true, true)); err != nil {
+					t.Fatalf("prepare pending PRO response: %v", err)
+				}
+			}
+			flushes := 0
+			data.OnFlush = func(buffer *TestDataBuffer) {
+				flushes++
+				written := buffer.buf.Bytes()
+				if len(written) == 0 || written[0] != byte(TTIDTY) {
+					t.Fatalf("outgoing negotiation bytes = %x, want DTY", written)
+				}
+				// No server DTY response: the following read must fail with EOF.
+				buffer.ResetBuf()
+			}
+
+			negotiator := newConnectionNegotiator(data, true)
+			sessCtx, shelf, cookie, err := negotiator.Negotiate(context.Background())
+			if !errors.Is(err, io.EOF) {
+				t.Fatalf("negotiation error = %v, want EOF", err)
+			}
+			if sessCtx != nil || shelf != nil || cookie != nil {
+				t.Fatal("failed renegotiation returned a session, shelf, or replacement cookie")
+			}
+			if flushes != tc.wantFlushes {
+				t.Fatalf("negotiation flushes = %d, want %d", flushes, tc.wantFlushes)
 			}
 		})
 	}

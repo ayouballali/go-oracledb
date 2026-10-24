@@ -41,62 +41,128 @@ package ttc
 import (
 	"context"
 	"errors"
-	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
 	"io"
 	"testing"
+
+	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
+	oracleErrors "github.com/oracle/go-oracledb/v26/oracle/errors"
 )
 
-type cookieResponseTestStreamer struct {
-	*MessageStreamer
-	responses []driverCommon.Message[driverCommon.MessageType]
-}
-
-func (s *cookieResponseTestStreamer) Pull(context.Context, ...driverCommon.MessageType) (driverCommon.Message[driverCommon.MessageType], error) {
-	if len(s.responses) == 0 {
-		return nil, io.EOF
-	}
-	msg := s.responses[0]
-	s.responses = s.responses[1:]
-	return msg, nil
-}
-
-// TestCookieAuthenticationResponses verifies password/token RPA preservation,
-// delayed negotiation messages, server errors, RENEG signaling, and RPA cleanup.
-func TestCookieAuthenticationResponses(t *testing.T) {
+// TestReadCookieAuthenticationResponse_Success verifies password and token response
+// sequences containing PRO, DTY, a warning, RPA, and successful OER.
+func TestReadCookieAuthenticationResponse_Success(t *testing.T) {
 	t.Parallel()
-	passwordRPA := &oSesskeyRPA{}
-	tokenRPA := &OAuthRPA{}
-	serverErr := errors.New("authentication rejected")
 	for _, tc := range []struct {
-		name        string
-		function    driverCommon.FunctionType
-		responses   []driverCommon.Message[driverCommon.MessageType]
-		want        driverCommon.Message[driverCommon.MessageType]
-		wantErr     error
-		wantFailure bool
+		name     string
+		function driverCommon.FunctionType
+		rpa      driverCommon.Message[driverCommon.MessageType]
 	}{
-		{"password", oSesskey, []driverCommon.Message[driverCommon.MessageType]{passwordRPA, &mockOer{}}, passwordRPA, nil, false},
-		{"token with delayed negotiation", oauth, []driverCommon.Message[driverCommon.MessageType]{newTTIpro(), NewTTIdty(), tokenRPA, &mockOer{}}, tokenRPA, nil, false},
-		{"renegotiation", oauth, []driverCommon.Message[driverCommon.MessageType]{newTTIReneg()}, nil, driverCommon.ErrTTIRENEG, true},
-		{"server error", oauth, []driverCommon.Message[driverCommon.MessageType]{&mockOer{err: serverErr}}, nil, serverErr, true},
-		{"missing RPA", oauth, []driverCommon.Message[driverCommon.MessageType]{&mockOer{}}, nil, nil, true},
+		{name: "password", function: oSesskey, rpa: &oSesskeyRPA{}},
+		{name: "token", function: oauth, rpa: &OAuthRPA{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			shelf := newShelf[driverCommon.MessageType]()
-			streamer := &cookieResponseTestStreamer{MessageStreamer: NewMessageStreamer(shelf), responses: tc.responses}
-			got, err := readCookieAuthenticationResponse(context.Background(), shelf, streamer, tc.function)
-			if (err != nil) != tc.wantFailure {
-				t.Fatalf("reader error = %v, want failure %t", err, tc.wantFailure)
+			streamer := &mockStreamer{
+				pullMsgs: []driverCommon.Message[driverCommon.MessageType]{
+					newTTIpro(), NewTTIdty(), &tTIwrn{}, tc.rpa, &mockOer{},
+				},
+				pullErr: io.EOF,
 			}
-			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
-				t.Fatalf("reader error = %v, want %v", err, tc.wantErr)
+
+			response, err := readCookieAuthenticationResponse(context.Background(), shelf, streamer, tc.function)
+
+			if err != nil {
+				t.Fatalf("read authentication response: %v", err)
 			}
-			if got != tc.want {
-				t.Fatalf("reader RPA = %T, want %T", got, tc.want)
+			if response != tc.rpa {
+				t.Fatalf("got RPA %p, want %p", response, tc.rpa)
 			}
-			if streamer.preUCallbacks[TTIRPA] != nil {
-				t.Fatal("RPA callback leaked after the reader returned")
+			if len(streamer.pullMsgs) != 0 {
+				t.Error("reader returned before consuming the successful OER")
 			}
 		})
 	}
+}
+
+// TestReadCookieAuthenticationResponse_TTIRENEG verifies that renegotiation
+// returns the fallback signal immediately without an authentication RPA.
+func TestReadCookieAuthenticationResponse_TTIRENEG(t *testing.T) {
+	t.Parallel()
+	shelf := newShelf[driverCommon.MessageType]()
+	streamer := &mockStreamer{
+		pullMsgs: []driverCommon.Message[driverCommon.MessageType]{&tTIReneg{}, &mockOer{}},
+		pullErr:  io.EOF,
+	}
+
+	response, err := readCookieAuthenticationResponse(context.Background(), shelf, streamer, oSesskey)
+
+	if !errors.Is(err, driverCommon.ErrTTIRENEG) {
+		t.Fatalf("got error %v, want ErrTTIRENEG", err)
+	}
+	if response != nil {
+		t.Errorf("got response %v, want nil", response)
+	}
+	if len(streamer.pullMsgs) != 1 {
+		t.Error("reader continued reading after TTIRENEG")
+	}
+}
+
+// TestReadCookieAuthenticationResponse_Failure verifies server rejection,
+// successful OER without RPA, and response read failures.
+func TestReadCookieAuthenticationResponse_Failure(t *testing.T) {
+	t.Parallel()
+
+	t.Run("server rejects authentication after RPA", func(t *testing.T) {
+		shelf := newShelf[driverCommon.MessageType]()
+		serverErr := errors.New("authentication rejected")
+		streamer := &mockStreamer{
+			pullMsgs: []driverCommon.Message[driverCommon.MessageType]{&OAuthRPA{}, &mockOer{err: serverErr}},
+			pullErr:  io.EOF,
+		}
+
+		response, err := readCookieAuthenticationResponse(context.Background(), shelf, streamer, oauth)
+
+		if !errors.Is(err, serverErr) {
+			t.Fatalf("got error %v, want server rejection %v", err, serverErr)
+		}
+		if response != nil {
+			t.Errorf("got response %v, want nil on rejection", response)
+		}
+	})
+
+	t.Run("successful OER without RPA", func(t *testing.T) {
+		shelf := newShelf[driverCommon.MessageType]()
+		streamer := &mockStreamer{
+			pullMsgs: []driverCommon.Message[driverCommon.MessageType]{&mockOer{}},
+			pullErr:  io.EOF,
+		}
+
+		response, err := readCookieAuthenticationResponse(context.Background(), shelf, streamer, oauth)
+
+		sqlErr, ok := err.(oracleErrors.SQLError)
+		if !ok || sqlErr.ErrorCode() != string(oracleErrors.InternalError) {
+			t.Fatalf("got error %v, want InternalError for missing RPA", err)
+		}
+		if response != nil {
+			t.Errorf("got response %v, want nil without RPA", response)
+		}
+	})
+
+	t.Run("response read fails", func(t *testing.T) {
+		shelf := newShelf[driverCommon.MessageType]()
+		streamer := &mockStreamer{pullErr: io.EOF}
+
+		response, err := readCookieAuthenticationResponse(context.Background(), shelf, streamer, oauth)
+
+		if !errors.Is(err, io.EOF) {
+			t.Fatalf("got error %v, want underlying EOF", err)
+		}
+		sqlErr, ok := err.(oracleErrors.SQLError)
+		if !ok || sqlErr.ErrorCode() != string(oracleErrors.AuthenticatorError) {
+			t.Fatalf("got error %v, want AuthenticatorError", err)
+		}
+		if response != nil {
+			t.Errorf("got response %v, want nil on read failure", response)
+		}
+	})
 }

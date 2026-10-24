@@ -49,7 +49,7 @@ import (
 // GetConnectionInstantiator returns the correct connection instantiator
 // according to the configuration
 func GetConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], reneg bool) (driverCommon.ConnectionInstantiator, error) {
-	// Get the correct connection instantiator depending on the configuration. For now we only support TTC
+
 	databaseUUID := ns.GetDatabaseUUID()
 	if reneg {
 		// normal with reng flag

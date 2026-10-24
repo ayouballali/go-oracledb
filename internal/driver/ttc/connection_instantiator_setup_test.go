@@ -71,3 +71,28 @@ func TestAuthencationFactoryBasic(t *testing.T) {
 		t.Errorf("should have returned an authenticator")
 	}
 }
+
+// TestConnectionSetupAppliesLobPrefetchAfterNegotiation verifies that the configured
+// LOB prefetch size is applied to marshallers created before authentication setup.
+func TestConnectionSetupAppliesLobPrefetchAfterNegotiation(t *testing.T) {
+	t.Skip("TODO: apply LOB prefetch configuration after connection properties become available")
+
+	negotiation := &negotiationSetup{_dataBuffer: NewArrayDataBuffer(128)}
+	shelf, sessionContext, _, _ := negotiation.Init()
+	config := oracleconfig.NewOracleDriverConfig()
+	config.DriverProperties.DefaultLobPrefetchSize = 8192
+	setup := &ConnectionInstantiatorSetup{
+		ns:            &mockNetworkSession{},
+		drvierConfig:  config,
+		authenticator: &mockAuthenticator{},
+	}
+
+	setup.PrepareForAuthetication(sessionContext, shelf)
+
+	for _, messageType := range []driverCommon.MessageType{TTIFUN, TTIPRO} {
+		marshaller := shelf.GetMarshallerForMessageType(messageType).(*MarshalEngine)
+		if got := marshaller._defaultLobPrefetchSize; got != 8192 {
+			t.Errorf("message %v: LOB prefetch size = %d, want 8192", messageType, got)
+		}
+	}
+}

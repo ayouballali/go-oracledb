@@ -50,6 +50,49 @@ import (
 	"golang.org/x/text/language"
 )
 
+// TestNewTTCConnectionInstantiatorNegotiationMode verifies that the constructor
+// passes normal and renegotiation modes to its negotiator.
+func TestNewTTCConnectionInstantiatorNegotiationMode(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name      string
+		mode      driverCommon.ConnectionMode
+		wantReneg bool
+	}{
+		{name: "normal", mode: driverCommon.ConnectionNormal, wantReneg: false},
+		{name: "renegotiation", mode: driverCommon.ConnectionRenegotiate, wantReneg: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := oracleconfig.NewOracleDriverConfig()
+			config.Credentials.User = "test-user"
+			config.Credentials.Password = "test-password"
+			ns := &struct {
+				driverCommon.NetworkSession
+				driverCommon.DataBuffer
+			}{
+				NetworkSession: &mockNetworkSession{},
+				DataBuffer:     NewArrayDataBuffer(16),
+			}
+
+			instantiator, err := NewTTCConnectionInstantiator(config, ns, nil, tc.mode)
+			if err != nil {
+				t.Fatalf("create connection instantiator: %v", err)
+			}
+			ci, ok := instantiator.(*connectionInstantiator)
+			if !ok {
+				t.Fatalf("instantiator type = %T, want *connectionInstantiator", instantiator)
+			}
+			negotiator, ok := ci.instantiatorSetup.negotiator.(*connectionNegotiator)
+			if !ok {
+				t.Fatalf("negotiator type = %T, want *connectionNegotiator", ci.instantiatorSetup.negotiator)
+			}
+			if negotiator.reneg != tc.wantReneg {
+				t.Fatalf("negotiator reneg = %t, want %t", negotiator.reneg, tc.wantReneg)
+			}
+		})
+	}
+}
+
 func TestGetConnection(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -153,44 +196,70 @@ func TestGetConnection(t *testing.T) {
 	}
 }
 
+// TestGetConnectionUsesInjectedCookieCache verifies eligibility and that cookie
+// updates depend on successful negotiation, not successful authentication.
 func TestGetConnectionUsesInjectedCookieCache(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	const databaseUUID = "test-database-uuid"
 	cookie := &ttiCookie{connectionProtocolVersion: 6}
-	cache := common.NewSafeLRUCache[*ttiCookie](50)
-	shelf := newShelf[driverCommon.MessageType]()
-	shelf.RegisterMessageStreamer(&mockStreamer{pullMsg: &mockOer{err: nil}})
-	shelf.RegisterMessageFactory(&mockFactory{returnMsg: NewOall18()})
-	ns := &mockNetworkSession{databaseUUID: databaseUUID}
-
-	ci := &connectionInstantiator{
-		cookieCache: cache,
-		instantiatorSetup: &ConnectionInstantiatorSetup{
-			negotiator: &mockNegotiator{
-				sessCtx: driverCommon.NewSessionContext(),
-				shelf:   shelf,
-				cookie:  cookie,
-			},
-			authenticator: &mockAuthenticator{},
-			ns:            ns,
-			drvierConfig: &oracleconfig.OracleDriverConfig{
-				DriverProperties: oracleconfig.OracleDriverProperties{
-					TTCCookieOptimizationEnabled: true,
-				},
-			},
-			localizationService: common.NewLocalizationService(language.English),
-			newConnectionFunc: func(_ context.Context, shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, ns driverCommon.NetworkSession) (*connection, error) {
-				return newTestConnection(shelf, sessCtx, ns), nil
-			},
+	previousCookie := &ttiCookie{connectionProtocolVersion: 5}
+	authErr := errors.New("authentication failed")
+	for _, tc := range []struct {
+		name          string
+		enabled       bool
+		uuid          string
+		authErr       error
+		initialCookie *ttiCookie
+		wantCookie    *ttiCookie
+	}{
+		{name: "successful negotiation caches cookie", enabled: true, uuid: databaseUUID, wantCookie: cookie},
+		{name: "optimization disabled", uuid: databaseUUID},
+		{name: "missing database UUID", enabled: true},
+		{
+			name: "authentication failure retains newly negotiated cookie", enabled: true, uuid: databaseUUID,
+			authErr: authErr, initialCookie: previousCookie, wantCookie: cookie,
 		},
-	}
-
-	if _, err := ci.GetConnection(ctx); err != nil {
-		t.Fatalf("GetConnection returned error: %v", err)
-	}
-	if cached, found := cache.Get(databaseUUID); !found || cached != cookie {
-		t.Fatalf("injected cache contains %p, found=%t; want negotiated cookie %p", cached, found, cookie)
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := common.NewSafeLRUCache[*ttiCookie](50)
+			if tc.initialCookie != nil {
+				cache.Put(tc.uuid, tc.initialCookie)
+			}
+			shelf := newShelf[driverCommon.MessageType]()
+			shelf.RegisterMessageStreamer(&mockStreamer{pullMsg: &mockOer{err: nil}})
+			shelf.RegisterMessageFactory(&mockFactory{returnMsg: NewOall18()})
+			ci := &connectionInstantiator{
+				cookieCache: cache,
+				instantiatorSetup: &ConnectionInstantiatorSetup{
+					negotiator: &mockNegotiator{
+						sessCtx: driverCommon.NewSessionContext(),
+						shelf:   shelf,
+						cookie:  cookie,
+					},
+					authenticator: &mockAuthenticator{err: tc.authErr},
+					ns:            &mockNetworkSession{databaseUUID: tc.uuid},
+					drvierConfig: &oracleconfig.OracleDriverConfig{
+						DriverProperties: oracleconfig.OracleDriverProperties{
+							TTCCookieOptimizationEnabled: tc.enabled,
+						},
+					},
+					localizationService: common.NewLocalizationService(language.English),
+					newConnectionFunc: func(_ context.Context, shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, ns driverCommon.NetworkSession) (*connection, error) {
+						return newTestConnection(shelf, sessCtx, ns), nil
+					},
+				},
+			}
+			wantErr := tc.authErr
+			if _, err := ci.GetConnection(ctx); !errors.Is(err, wantErr) {
+				t.Fatalf("GetConnection error = %v, want %v", err, wantErr)
+			}
+			cached, found := cache.Get(tc.uuid)
+			if cached != tc.wantCookie || found != (tc.wantCookie != nil) {
+				t.Fatalf("cached cookie = %p, found=%t; want %p, found=%t",
+					cached, found, tc.wantCookie, tc.wantCookie != nil)
+			}
+		})
 	}
 }
 

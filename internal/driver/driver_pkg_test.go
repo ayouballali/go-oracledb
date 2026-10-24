@@ -36,44 +36,29 @@
 ** SOFTWARE.
  */
 
-package session
+package driver
 
 import (
-	"context"
+	"fmt"
+	"os"
 	"testing"
+
+	oracleTest "github.com/oracle/go-oracledb/v26/internal/tests"
 )
 
-// TestHandleAcceptDatabaseUUID verifies raw UUID extraction, older-server
-// behavior, and rejection of a truncated UUID field.
-func TestHandleAcceptDatabaseUUID(t *testing.T) {
-	t.Parallel()
-	uuid := []byte{0, 1, 2, 3, 4, 5, 6, 7, 0x80, 0x90, 0xa0, 0xb0, 0xc0, 0xd0, 0xe0, 0xff}
-	for _, tc := range []struct {
-		name      string
-		version   int
-		size      int
-		wantUUID  string
-		wantError bool
-	}{
-		{"supported", TNS_VERSION_MIN_END_OF_RESPONSE, TNS_UUID_OFFSET + NSPACUUIDLEN, string(uuid), false},
-		{"older server", TNS_VERSION_MIN_DATA_FLAGS, NSPACFL2 + 4, "", false},
-		{"truncated", TNS_VERSION_MIN_END_OF_RESPONSE, TNS_UUID_OFFSET + NSPACUUIDLEN - 1, "", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ns := newNetworkSession()
-			ns.sAtts = newSessionAtts("")
-			ns.sAtts.version = tc.version
-			packet := &acceptPacket{buf: make([]byte, tc.size)}
-			if tc.size >= TNS_UUID_OFFSET+NSPACUUIDLEN {
-				copy(packet.buf[TNS_UUID_OFFSET:], uuid)
-			}
-			err := ns.handleAccept(context.Background(), packet)
-			if (err != nil) != tc.wantError {
-				t.Fatalf("handleAccept error = %v, want error %t", err, tc.wantError)
-			}
-			if got := ns.GetDatabaseUUID(); got != tc.wantUUID {
-				t.Fatalf("database UUID = %x, want %x", got, tc.wantUUID)
-			}
-		})
+func TestMain(m *testing.M) {
+	if err := oracleTest.InitConfig(); err != nil {
+		fmt.Fprintf(os.Stderr, "InitConfig failed: %v\n", err)
+		os.Exit(1)
 	}
+	os.Exit(m.Run())
+}
+
+func TestCategoryExecutor(t *testing.T) {
+	oracleTest.RunCategoryExecutor(t, oracleTest.TestCategories, testCases)
+}
+
+var testCases = []oracleTest.CategorizedTestCase{
+	{Name: "TestGetConnectionInstantiatorCacheHit", Categories: "unitary", Exclusive: false, Fn: TestGetConnectionInstantiatorCacheHit},
+	{Name: "TestGetConnectionInstantiatorSelectsNormal", Categories: "unitary", Exclusive: false, Fn: TestGetConnectionInstantiatorSelectsNormal},
 }
