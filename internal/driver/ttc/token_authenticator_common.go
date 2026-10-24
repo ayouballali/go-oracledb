@@ -22,13 +22,15 @@ import (
 	oracleProviders "github.com/oracle/go-oracledb/v26/oracle/providers"
 )
 
-type tokenAuthenticatorSetup struct {
+// tokenAuthenticatorCommon prepares token credentials and OAUTH messages for
+// the normal and cookie token authenticators on one connection.
+type tokenAuthenticatorCommon struct {
 	shelf          ttiShelf[driverCommon.MessageType]
 	sessionContext *driverCommon.SessionContext
 	tokenProvider  oracleProviders.TokenAuthenticationProvider
 }
 
-func (ta *tokenAuthenticatorSetup) prepareOAuth(ctx context.Context) (driverCommon.Message[driverCommon.MessageType], error) {
+func (ta *tokenAuthenticatorCommon) prepareOAuth(ctx context.Context) (driverCommon.Message[driverCommon.MessageType], error) {
 	if ta.tokenProvider == nil {
 		return nil, common.NewOracleError(oracleErrors.NoAuthenticatorError, nil)
 	}
@@ -83,7 +85,7 @@ func (ta *tokenAuthenticatorSetup) prepareOAuth(ctx context.Context) (driverComm
 // Returns:
 //   - the generated token header, or an empty string when no header is required.
 //   - an error if required session or connect descriptor values cannot be derived.
-func (ta *tokenAuthenticatorSetup) generateTokenHeader() (string, error) {
+func (ta *tokenAuthenticatorCommon) generateTokenHeader() (string, error) {
 	if expectsHeader(ta.tokenProvider) {
 		connectDescriptor, err := getRequiredClientProperty(ta.sessionContext, driverCommon.ConnectDescriptor)
 		if err != nil {
@@ -122,7 +124,7 @@ func (ta *tokenAuthenticatorSetup) generateTokenHeader() (string, error) {
 // Returns:
 //   - the base64-encoded signature, or an empty string when signing is not required.
 //   - an error if key retrieval, parsing, or signing fails.
-func (ta *tokenAuthenticatorSetup) signHeader(ctx context.Context, header string, token string) (string, error) {
+func (ta *tokenAuthenticatorCommon) signHeader(ctx context.Context, header string, token string) (string, error) {
 	if provider, ok := ta.tokenProvider.(oracleProviders.SignedTokenAuthenticationProvider); ok && len(header) > 0 {
 		keyPEM, err := provider.PrivateKeyForToken(ctx, token)
 		if err != nil {

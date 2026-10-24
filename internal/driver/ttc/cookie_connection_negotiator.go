@@ -7,24 +7,24 @@ import (
 )
 
 type cookieConnectionNegotiator struct {
-	negotiationSetup *negotiationSetup
-	cookie           *ttiCookie
+	shared *connectionNegotiatorCommon
+	cookie *ttiCookie
 }
 
 func newCookieConnectionNegotiator(buf driverCommon.DataBuffer, cookie *ttiCookie) *cookieConnectionNegotiator {
-	negotiation := &negotiationSetup{
+	shared := &connectionNegotiatorCommon{
 		_dataBuffer: buf,
 	}
 	return &cookieConnectionNegotiator{
-		negotiationSetup: negotiation,
-		cookie:           cookie,
+		shared: shared,
+		cookie: cookie,
 	}
 }
 
 func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.SessionContext, *ttiShelf[driverCommon.MessageType], *ttiCookie, error) {
-	negotiateSetup := c.negotiationSetup
-	shelf, sessCtx, msgStmr, _ := negotiateSetup.Init()
-	pro := c.cookie.newPRO()
+	shared := c.shared
+	shelf, sessCtx, msgStmr, _ := shared.initializeNegotiationResources()
+	pro := c.cookie.newProtocolMessage()
 	// Register negotiated server capabilities
 	shelf.RegisterCapabilities(pro.serverCaps.toMap())
 	if !isCharSetMultibyte(pro.svrCharSet) {
@@ -49,9 +49,9 @@ func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommo
 		return nil, nil, nil, err
 	}
 
-	negotiateSetup.configureNegotiation(shelf, sessCtx, pro, dty)
+	shared.applyNegotiatedSettings(shelf, sessCtx, pro, dty)
 
-	dtyPreCallBack := func(header *messageHeader) (driverCommon.Message[driverCommon.MessageType], error) {
+	prepareDTYResponse := func(header *messageHeader) (driverCommon.Message[driverCommon.MessageType], error) {
 		msg, err := shelf.GetMessageFactory().(Factory).GetMessage(TTIDTY)
 		if err != nil {
 			return nil, err
@@ -59,17 +59,17 @@ func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommo
 		msg.(*tTIdty).SetNegotiatedCapabilities(pro.clientCaps)
 		return msg, nil
 	}
-	dtyPostCallBack := func(msg driverCommon.Message[driverCommon.MessageType], prevErr error) (bool, error) {
-		if prevErr != nil {
-			return true, prevErr
+	updateTimeZoneVersion := func(msg driverCommon.Message[driverCommon.MessageType], decodeErr error) (bool, error) {
+		if decodeErr != nil {
+			return true, decodeErr
 		}
 		dty := msg.(*tTIdty)
 		sessCtx.SetTimeZoneVersionNumber(dty.GetTimeZoneVersionNumber())
 
 		return true, nil
 	}
-	msgStmr.RegisterPostUnmarshallCallback(TTIDTY, dtyPostCallBack)
-	msgStmr.RegisterPreUnmarshallCallback(TTIDTY, dtyPreCallBack)
+	msgStmr.RegisterPostUnmarshallCallback(TTIDTY, updateTimeZoneVersion)
+	msgStmr.RegisterPreUnmarshallCallback(TTIDTY, prepareDTYResponse)
 
 	return sessCtx, shelf, nil, nil
 }

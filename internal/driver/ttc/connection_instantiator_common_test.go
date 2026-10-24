@@ -77,17 +77,17 @@ func TestAuthencationFactoryBasic(t *testing.T) {
 func TestConnectionSetupAppliesLobPrefetchAfterNegotiation(t *testing.T) {
 	t.Skip("TODO: apply LOB prefetch configuration after connection properties become available")
 
-	negotiation := &negotiationSetup{_dataBuffer: NewArrayDataBuffer(128)}
-	shelf, sessionContext, _, _ := negotiation.Init()
+	negotiation := &connectionNegotiatorCommon{_dataBuffer: NewArrayDataBuffer(128)}
+	shelf, sessionContext, _, _ := negotiation.initializeNegotiationResources()
 	config := oracleconfig.NewOracleDriverConfig()
 	config.DriverProperties.DefaultLobPrefetchSize = 8192
-	setup := &ConnectionInstantiatorSetup{
+	setup := &ConnectionInstantiatorCommon{
 		ns:            &mockNetworkSession{},
-		drvierConfig:  config,
+		driverConfig:  config,
 		authenticator: &mockAuthenticator{},
 	}
 
-	setup.PrepareForAuthetication(sessionContext, shelf)
+	setup.PrepareForAuthentication(sessionContext, shelf)
 
 	for _, messageType := range []driverCommon.MessageType{TTIFUN, TTIPRO} {
 		marshaller := shelf.GetMarshallerForMessageType(messageType).(*MarshalEngine)

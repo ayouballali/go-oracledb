@@ -52,7 +52,7 @@ const ttiCookieVersion byte = 1
 const zeroByte = 0
 
 // LRU cache for TTC cookies
-var databaseNegotiatedInformation = common.NewSafeLRUCache[*ttiCookie](50)
+var ttcCookieCache = common.NewSafeLRUCache[*ttiCookie](50)
 
 // TODO(design): Validate cache ownership, size, eviction, and concurrent-connection behavior.
 
@@ -135,10 +135,10 @@ func (c *ttiCookie) MarshalTo(ctx context.Context, mar driverCommon.Marshaller) 
 }
 
 func GetCachedTTCCookie(databaseUUID string) (*ttiCookie, bool) {
-	cookie, found := databaseNegotiatedInformation.Get(databaseUUID)
+	cookie, found := ttcCookieCache.Get(databaseUUID)
 	return cookie, found && cookie != nil
 }
-func (c *ttiCookie) newPRO() *tTIpro {
+func (c *ttiCookie) newProtocolMessage() *tTIpro {
 	pro := newTTIpro().(*tTIpro)
 	pro.proSvrVer = c.connectionProtocolVersion
 	pro.svrCharSet = c.databaseCharSet
@@ -163,18 +163,18 @@ func IsTTCCookieEligible(
 // a cleanup function that removes the entry. The cookie is not intended
 // for a real negotiation. Tests must use a unique database UUID.
 func SeedTTCCookieForTest(databaseUUID string) func() {
-	databaseNegotiatedInformation.Put(
+	ttcCookieCache.Put(
 		databaseUUID,
 		&ttiCookie{connectionProtocolVersion: 6},
 	)
 	return func() {
-		databaseNegotiatedInformation.Remove(databaseUUID)
+		ttcCookieCache.Remove(databaseUUID)
 	}
 }
 
 // ClearTTCCookieCacheForTest resets cached TTC negotiation data for integration tests.
 func ClearTTCCookieCacheForTest() {
-	databaseNegotiatedInformation.Clear()
+	ttcCookieCache.Clear()
 }
 
 // CorruptTTCCookieForTest replaces only the specified database's cached cookie
@@ -186,7 +186,7 @@ func CorruptTTCCookieForTest(databaseUUID string) (driverCommon.UB2, bool) {
 	}
 	stale := *cookie
 	stale.connectionProtocolVersion = 0
-	databaseNegotiatedInformation.Put(databaseUUID, &stale)
+	ttcCookieCache.Put(databaseUUID, &stale)
 	return cookie.connectionProtocolVersion, true
 }
 

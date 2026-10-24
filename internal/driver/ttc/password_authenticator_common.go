@@ -28,7 +28,9 @@ func parseUsername(username string) (string, string) {
 	return sanitizeInputCredential(username), proxyClient
 }
 
-type passwordAuthenticatorSetup struct {
+// passwordAuthenticatorCommon holds credentials and authentication steps used
+// by the normal and cookie password authenticators for one connection.
+type passwordAuthenticatorCommon struct {
 	_username                      driverCommon.B1Array
 	_proxyClient                   driverCommon.B1Array
 	_password                      driverCommon.B1Array
@@ -48,18 +50,18 @@ type passwordAuthenticatorSetup struct {
 //   - mode : logonMode
 func newPasswordAuthenticatorWithLogonMode(username, password string, mode common.LogonMode, connectString string) *passwordAuthenticator {
 	pa := newPasswordAuthenticator(username, password, connectString)
-	pa.setup._logonMode = mode.Value()
+	pa.shared._logonMode = mode.Value()
 	return pa
 }
 
-func (pa *passwordAuthenticatorSetup) validatePasswordLength() error {
+func (pa *passwordAuthenticatorCommon) validatePasswordLength() error {
 	if len(pa._password) > maxPasswordBytes {
 		return common.NewOracleError(oracleErrors.AuthenticatorError, nil, "password length")
 	}
 	return nil
 }
 
-func (pa *passwordAuthenticatorSetup) prepareOSESSKEY() (driverCommon.Message[driverCommon.MessageType], error) {
+func (pa *passwordAuthenticatorCommon) prepareOSESSKEY() (driverCommon.Message[driverCommon.MessageType], error) {
 	shelf := pa._shelf
 
 	osesskey, err := shelf.GetMessageFactory().(Factory).GetMessageForFunction(TTIFUN, oSesskey)
@@ -74,7 +76,7 @@ func (pa *passwordAuthenticatorSetup) prepareOSESSKEY() (driverCommon.Message[dr
 	return osesskey, nil
 }
 
-func (pa *passwordAuthenticatorSetup) _doOAuth(ctx context.Context) error {
+func (pa *passwordAuthenticatorCommon) _doOAuth(ctx context.Context) error {
 	common.Odl.Fine("Authenticator, starting oauthMsg")
 	shelf := pa._shelf
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)

@@ -9,12 +9,12 @@ import (
 )
 
 type cookiePasswordAuthenticator struct {
-	setup *passwordAuthenticatorSetup
+	shared *passwordAuthenticatorCommon
 }
 
 func newCookiePasswordAuthenticator(username, password string, connectString string) *cookiePasswordAuthenticator {
 	username, proxyClient := parseUsername(username)
-	setup := &passwordAuthenticatorSetup{
+	shared := &passwordAuthenticatorCommon{
 		_connectString: connectString,
 		_username:      driverCommon.StringToB1Array(username),
 		_proxyClient:   driverCommon.StringToB1Array(proxyClient),
@@ -23,11 +23,11 @@ func newCookiePasswordAuthenticator(username, password string, connectString str
 	}
 
 	return &cookiePasswordAuthenticator{
-		setup: setup,
+		shared: shared,
 	}
 }
 
-// newPasswordAuthenticatorWithLogonMode instantiates a new password authenticator.
+// newCookiePasswordAuthenticatorWithLogonMode creates a cookie password authenticator with a logon mode.
 // Parameters:
 //   - username : the username
 //   - password : user password
@@ -35,22 +35,22 @@ func newCookiePasswordAuthenticator(username, password string, connectString str
 //   - mode : logonMode
 func newCookiePasswordAuthenticatorWithLogonMode(username, password string, mode common.LogonMode, connectString string) *cookiePasswordAuthenticator {
 	pa := newCookiePasswordAuthenticator(username, password, connectString)
-	pa.setup._logonMode = mode.Value()
+	pa.shared._logonMode = mode.Value()
 	return pa
 }
 
 func (pa *cookiePasswordAuthenticator) Authenticate(ctx context.Context) error {
-	setup := pa.setup
-	common.Odl.Fine("Authenticate start for user", "userName", setup._username)
-	shelf := setup._shelf
+	shared := pa.shared
+	common.Odl.Fine("Authenticate start for user", "userName", shared._username)
+	shelf := shared._shelf
 
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
 
-	if err := setup.validatePasswordLength(); err != nil {
+	if err := shared.validatePasswordLength(); err != nil {
 		return err
 	}
 
-	osesskey, err := setup.prepareOSESSKEY()
+	osesskey, err := shared.prepareOSESSKEY()
 	if err != nil {
 		return err
 	}
@@ -73,9 +73,9 @@ func (pa *cookiePasswordAuthenticator) Authenticate(ctx context.Context) error {
 	}
 
 	osesskeyrpa := response.(*oSesskeyRPA)
-	setup._sessionContext.UpdateSessionProperties(osesskeyrpa.connectionValues)
+	shared._sessionContext.UpdateSessionProperties(osesskeyrpa.connectionValues)
 
-	err = setup._doOAuth(ctx)
+	err = shared._doOAuth(ctx)
 	if err != nil {
 		common.Odl.Warn("Authentication failed, oauth keys exchange failed", "error", err)
 		return common.NewOracleError(oracleErrors.AuthenticatorError, err, nil)
@@ -85,10 +85,10 @@ func (pa *cookiePasswordAuthenticator) Authenticate(ctx context.Context) error {
 
 // SetSessionContext sets the session context to use within the authenticator.
 func (pa *cookiePasswordAuthenticator) SetSessionContext(sessCtx *driverCommon.SessionContext) {
-	pa.setup._sessionContext = sessCtx
+	pa.shared._sessionContext = sessCtx
 }
 
 // SetShelf sets the shelf to use within the authenticator.
 func (pa *cookiePasswordAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
-	pa.setup._shelf = *shelf
+	pa.shared._shelf = *shelf
 }

@@ -10,29 +10,29 @@ import (
 )
 
 type cookieTokenAuthenticator struct {
-	tokenSetupAuthenticator *tokenAuthenticatorSetup
+	shared *tokenAuthenticatorCommon
 }
 
 func newCookieTokenAuthenticator(tokenProvider oracleProviders.TokenAuthenticationProvider) *cookieTokenAuthenticator {
-	authSetup := &tokenAuthenticatorSetup{
+	shared := &tokenAuthenticatorCommon{
 		tokenProvider: tokenProvider,
 	}
 	return &cookieTokenAuthenticator{
-		tokenSetupAuthenticator: authSetup,
+		shared: shared,
 	}
 }
 
 func (ta *cookieTokenAuthenticator) Authenticate(ctx context.Context) error {
-	setup := ta.tokenSetupAuthenticator
+	shared := ta.shared
 
 	common.Odl.Debug("Start TOKEN authentication")
 
-	msg, err := setup.prepareOAuth(ctx)
+	msg, err := shared.prepareOAuth(ctx)
 	if err != nil {
 		return err
 	}
 
-	shelf := setup.shelf
+	shelf := shared.shelf
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
 	// send oauth message
 	if err := streamer.Push(ctx, msg); err != nil {
@@ -46,7 +46,7 @@ func (ta *cookieTokenAuthenticator) Authenticate(ctx context.Context) error {
 		return err
 	}
 	oauthrpa := response.(*OAuthRPA)
-	setup.sessionContext.UpdateSessionProperties(oauthrpa.connectionValues)
+	shared.sessionContext.UpdateSessionProperties(oauthrpa.connectionValues)
 
 	return nil
 }
@@ -57,7 +57,7 @@ func (ta *cookieTokenAuthenticator) Authenticate(ctx context.Context) error {
 // Parameters:
 //   - shelf: the TTC shelf bound to the current connection attempt.
 func (ta *cookieTokenAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
-	ta.tokenSetupAuthenticator.shelf = *shelf
+	ta.shared.shelf = *shelf
 }
 
 // SetSessionContext stores the session context used during token
@@ -66,5 +66,5 @@ func (ta *cookieTokenAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.Messag
 // Parameters:
 //   - sessCtx: the session context associated with the current connection attempt.
 func (ta *cookieTokenAuthenticator) SetSessionContext(sessCtx *driverCommon.SessionContext) {
-	ta.tokenSetupAuthenticator.sessionContext = sessCtx
+	ta.shared.sessionContext = sessCtx
 }

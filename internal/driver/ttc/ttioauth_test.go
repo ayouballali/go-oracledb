@@ -674,7 +674,7 @@ func TestPasswordAuthenticatorValidatePasswordLength(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			pa := newPasswordAuthenticator("user", strings.Repeat("a", tc.length), "connect")
-			err := pa.setup.validatePasswordLength()
+			err := pa.shared.validatePasswordLength()
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("validatePasswordLength error = %v, wantErr %v", err, tc.wantErr)
 			}

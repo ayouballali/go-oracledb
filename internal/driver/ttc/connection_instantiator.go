@@ -50,8 +50,8 @@ import (
 )
 
 type connectionInstantiator struct {
-	instantiatorSetup *ConnectionInstantiatorSetup
-	cookieCache       *common.SafeLRUCache[*ttiCookie]
+	shared      *ConnectionInstantiatorCommon
+	cookieCache *common.SafeLRUCache[*ttiCookie]
 }
 
 // NewTTCConnectionInstantiator creates a new TTC connection instantiator.
@@ -81,15 +81,15 @@ func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns dr
 		)
 	}
 
-	instantiatorSetup, err := NewConnectionInstantiatorSetup(config, ns, providerRegistry, createNegotiator, createAuthenticator)
+	shared, err := NewConnectionInstantiatorCommon(config, ns, providerRegistry, createNegotiator, createAuthenticator)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &connectionInstantiator{
-		instantiatorSetup: instantiatorSetup,
-		cookieCache:       databaseNegotiatedInformation,
+		shared:      shared,
+		cookieCache: ttcCookieCache,
 	}, nil
 }
 
@@ -102,26 +102,26 @@ func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns dr
 // Returns:
 //   - the established driver connection.
 //   - an error if negotiation, authentication, or connection creation fails.
-func (connInstantiator *connectionInstantiator) GetConnection(ctx context.Context) (driver.Conn, error) {
-	setup := connInstantiator.instantiatorSetup
-	negotiator := connInstantiator.instantiatorSetup.negotiator
-	authenticator := connInstantiator.instantiatorSetup.authenticator
-	databaseUUID := setup.ns.GetDatabaseUUID()
+func (ci *connectionInstantiator) GetConnection(ctx context.Context) (driver.Conn, error) {
+	shared := ci.shared
+	negotiator := ci.shared.negotiator
+	authenticator := ci.shared.authenticator
+	databaseUUID := shared.ns.GetDatabaseUUID()
 
-	if setup.localizationService == nil {
+	if shared.localizationService == nil {
 		return nil, common.NewOracleError(oracleErrors.MissingLocalizationService, nil)
 	}
 
 	// Perform wire negotiation; capture session context, shelf and capability
 	sessCtx, shelf, cookie, err := negotiator.Negotiate(ctx)
 	if err != nil {
-		return nil, setup.localizationService.LocalizeError(err)
+		return nil, shared.localizationService.LocalizeError(err)
 	}
-	if IsTTCCookieEligible(setup.drvierConfig.DriverProperties, databaseUUID) {
-		connInstantiator.cookieCache.Put(databaseUUID, cookie)
+	if IsTTCCookieEligible(shared.driverConfig.DriverProperties, databaseUUID) {
+		ci.cookieCache.Put(databaseUUID, cookie)
 	}
 
-	setup.PrepareForAuthetication(sessCtx, shelf)
+	shared.PrepareForAuthentication(sessCtx, shelf)
 
 	// Authenticate
 	err = authenticator.Authenticate(ctx)
@@ -133,5 +133,5 @@ func (connInstantiator *connectionInstantiator) GetConnection(ctx context.Contex
 	sessCtx.GetSessionProperties().Snapshot()
 
 	common.Odl.Debug("Connect end")
-	return setup.newConnectionFunc(ctx, shelf, sessCtx, setup.ns)
+	return shared.newConnectionFunc(ctx, shelf, sessCtx, shared.ns)
 }

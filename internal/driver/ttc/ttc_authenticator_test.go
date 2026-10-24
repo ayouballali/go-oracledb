@@ -73,20 +73,20 @@ func TestNewPasswordAuthenticatorParsesProxy(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			const password = "password_test"
 			for _, authenticator := range []struct {
-				name  string
-				setup *passwordAuthenticatorSetup
+				name   string
+				shared *passwordAuthenticatorCommon
 			}{
-				{"normal", newPasswordAuthenticator(tc.input, password, "connect").setup},
-				{"cookie", newCookiePasswordAuthenticator(tc.input, password, "connect").setup},
+				{"normal", newPasswordAuthenticator(tc.input, password, "connect").shared},
+				{"cookie", newCookiePasswordAuthenticator(tc.input, password, "connect").shared},
 			} {
 				t.Run(authenticator.name, func(t *testing.T) {
-					if got := string(authenticator.setup._username); got != tc.user {
+					if got := string(authenticator.shared._username); got != tc.user {
 						t.Fatalf("username = %q, want %q", got, tc.user)
 					}
-					if got := string(authenticator.setup._proxyClient); got != tc.client {
+					if got := string(authenticator.shared._proxyClient); got != tc.client {
 						t.Fatalf("proxy client = %q, want %q", got, tc.client)
 					}
-					if string(authenticator.setup._password) != password {
+					if string(authenticator.shared._password) != password {
 						t.Fatal("username parsing changed the password")
 					}
 				})

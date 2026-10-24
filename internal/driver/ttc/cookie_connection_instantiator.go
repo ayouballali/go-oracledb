@@ -12,11 +12,11 @@ import (
 )
 
 type cookieConnectionInstantiator struct {
-	instantiatorSetup *ConnectionInstantiatorSetup
-	cookie            *ttiCookie
+	shared *ConnectionInstantiatorCommon
+	cookie *ttiCookie
 }
 
-func NewTTCOptimizedConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], cookie *ttiCookie) (*cookieConnectionInstantiator, error) {
+func NewTTCCookieConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], cookie *ttiCookie) (*cookieConnectionInstantiator, error) {
 
 	createNegotiator := func(buffer driverCommon.DataBuffer) Negotiator {
 		return GetNegotiator(
@@ -34,34 +34,34 @@ func NewTTCOptimizedConnectionInstantiator(config *oracleconfig.OracleDriverConf
 		)
 	}
 
-	instantiatorSetup, err := NewConnectionInstantiatorSetup(config, ns, providerRegistry, createNegotiator, createAuthenticator)
+	shared, err := NewConnectionInstantiatorCommon(config, ns, providerRegistry, createNegotiator, createAuthenticator)
 	if err != nil {
 		return nil, err
 	}
 
 	return &cookieConnectionInstantiator{
-		instantiatorSetup: instantiatorSetup,
+		shared: shared,
 	}, nil
 }
 
-func (optimizedConnInstantiator *cookieConnectionInstantiator) GetConnection(ctx context.Context) (driver.Conn, error) {
-	setup := optimizedConnInstantiator.instantiatorSetup
-	negotiator := optimizedConnInstantiator.instantiatorSetup.negotiator
-	authenticator := optimizedConnInstantiator.instantiatorSetup.authenticator
-	if setup.localizationService == nil {
+func (ci *cookieConnectionInstantiator) GetConnection(ctx context.Context) (driver.Conn, error) {
+	shared := ci.shared
+	negotiator := ci.shared.negotiator
+	authenticator := ci.shared.authenticator
+	if shared.localizationService == nil {
 		return nil, common.NewOracleError(oracleErrors.MissingLocalizationService, nil)
 	}
 
 	// Perform wire negotiation; capture session context, shelf and capability
 	sessCtx, shelf, _, err := negotiator.Negotiate(ctx)
 	if err != nil {
-		return nil, setup.localizationService.LocalizeError(err)
+		return nil, shared.localizationService.LocalizeError(err)
 	}
 
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
 	defer unregisterCookieNegotiationCallbacks(streamer)
 
-	setup.PrepareForAuthetication(sessCtx, shelf)
+	shared.PrepareForAuthentication(sessCtx, shelf)
 
 	// Authenticate
 	err = authenticator.Authenticate(ctx)
@@ -72,5 +72,5 @@ func (optimizedConnInstantiator *cookieConnectionInstantiator) GetConnection(ctx
 	sessCtx.GetSessionProperties().Snapshot()
 
 	common.Odl.Debug("Connect end")
-	return setup.newConnectionFunc(ctx, shelf, sessCtx, setup.ns)
+	return shared.newConnectionFunc(ctx, shelf, sessCtx, shared.ns)
 }

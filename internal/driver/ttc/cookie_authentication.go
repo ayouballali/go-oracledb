@@ -16,7 +16,7 @@ func readCookieAuthenticationResponse(
 ) (driverCommon.Message[driverCommon.MessageType], error) {
 	var rpa driverCommon.Message[driverCommon.MessageType] = nil
 
-	oauthRPACallBack := func(t *messageHeader) (driverCommon.Message[driverCommon.MessageType], error) {
+	createAuthenticationRPA := func(t *messageHeader) (driverCommon.Message[driverCommon.MessageType], error) {
 		common.Odl.Fine("Inside oauthRPACallBack hdr", "msg", t.GetType())
 		msg, err := shelf.GetMessageFactory().(Factory).GetMessageForFunction(TTIRPA, funcType)
 		if err != nil {
@@ -25,7 +25,7 @@ func readCookieAuthenticationResponse(
 		return msg, nil
 	}
 
-	streamer.RegisterPreUnmarshallCallback(TTIRPA, oauthRPACallBack)
+	streamer.RegisterPreUnmarshallCallback(TTIRPA, createAuthenticationRPA)
 	defer streamer.UnRegisterPreUnmarshallCallback(TTIRPA)
 
 	goOn := true

@@ -90,11 +90,11 @@ func newCookieInstantiatorTestSetup() *cookieInstantiatorTestSetup {
 	authenticator := &mockCookieConnectionAuthenticator{streamer: streamer}
 	connectionFactory := &mockCookieConnectionFactory{connection: &connection{}}
 	instantiator := &cookieConnectionInstantiator{
-		instantiatorSetup: &ConnectionInstantiatorSetup{
+		shared: &ConnectionInstantiatorCommon{
 			negotiator:          negotiator,
 			authenticator:       authenticator,
 			ns:                  &mockNetworkSession{},
-			drvierConfig:        oracleconfig.NewOracleDriverConfig(),
+			driverConfig:        oracleconfig.NewOracleDriverConfig(),
 			localizationService: common.NewLocalizationService(language.English),
 			newConnectionFunc:   connectionFactory.NewConnection,
 		},
@@ -127,9 +127,9 @@ func assertCookieInstantiatorCallbacksCleanedUp(t *testing.T, setup *cookieInsta
 	}
 }
 
-// TestNewTTCOptimizedConnectionInstantiator verifies cookie negotiator wiring
+// TestNewTTCCookieConnectionInstantiator verifies cookie negotiator wiring
 // and cookie authenticator selection for password and token credentials.
-func TestNewTTCOptimizedConnectionInstantiator(t *testing.T) {
+func TestNewTTCCookieConnectionInstantiator(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name     string
@@ -154,11 +154,11 @@ func TestNewTTCOptimizedConnectionInstantiator(t *testing.T) {
 			cookie := &ttiCookie{connectionProtocolVersion: 6}
 			registry := newTestProviderRegistry(mockTokenAuthenticationProvider{})
 
-			instantiator, err := NewTTCOptimizedConnectionInstantiator(config, ns, registry, cookie)
+			instantiator, err := NewTTCCookieConnectionInstantiator(config, ns, registry, cookie)
 			if err != nil {
 				t.Fatalf("create cookie connection instantiator: %v", err)
 			}
-			setup := instantiator.instantiatorSetup
+			setup := instantiator.shared
 			negotiator, ok := setup.negotiator.(*cookieConnectionNegotiator)
 			if !ok {
 				t.Fatalf("negotiator type = %T, want *cookieConnectionNegotiator", setup.negotiator)

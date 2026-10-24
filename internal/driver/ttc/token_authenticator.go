@@ -48,7 +48,7 @@ import (
 )
 
 type tokenAuthenticator struct {
-	tokenSetupAuthenticator *tokenAuthenticatorSetup
+	shared *tokenAuthenticatorCommon
 }
 
 // newTokenAuthenticator creates a token authenticator backed by the first
@@ -61,11 +61,11 @@ type tokenAuthenticator struct {
 // Returns:
 //   - the configured token authenticator.
 func newTokenAuthenticator(tokenProvider oracleProviders.TokenAuthenticationProvider) *tokenAuthenticator {
-	authSetup := &tokenAuthenticatorSetup{
+	shared := &tokenAuthenticatorCommon{
 		tokenProvider: tokenProvider,
 	}
 	return &tokenAuthenticator{
-		tokenSetupAuthenticator: authSetup,
+		shared: shared,
 	}
 }
 
@@ -75,7 +75,7 @@ func newTokenAuthenticator(tokenProvider oracleProviders.TokenAuthenticationProv
 // Parameters:
 //   - shelf: the TTC shelf bound to the current connection attempt.
 func (ta *tokenAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
-	ta.tokenSetupAuthenticator.shelf = *shelf
+	ta.shared.shelf = *shelf
 }
 
 // SetSessionContext stores the session context used during token
@@ -84,7 +84,7 @@ func (ta *tokenAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.MessageType]
 // Parameters:
 //   - sessCtx: the session context associated with the current connection attempt.
 func (ta *tokenAuthenticator) SetSessionContext(sessCtx *driverCommon.SessionContext) {
-	ta.tokenSetupAuthenticator.sessionContext = sessCtx
+	ta.shared.sessionContext = sessCtx
 }
 
 // Authenticate performs token-based authentication over TTC and updates the
@@ -97,16 +97,16 @@ func (ta *tokenAuthenticator) SetSessionContext(sessCtx *driverCommon.SessionCon
 //   - nil when authentication succeeds.
 //   - an error if token resolution, signing, message exchange, or server validation fails.
 func (ta *tokenAuthenticator) Authenticate(ctx context.Context) error {
-	setup := ta.tokenSetupAuthenticator
+	shared := ta.shared
 
 	common.Odl.Debug("Start TOKEN authentication")
 
-	msg, err := setup.prepareOAuth(ctx)
+	msg, err := shared.prepareOAuth(ctx)
 	if err != nil {
 		return err
 	}
 
-	shelf := setup.shelf
+	shelf := shared.shelf
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
 
 	// send oauth message
@@ -122,7 +122,7 @@ func (ta *tokenAuthenticator) Authenticate(ctx context.Context) error {
 		return err
 	}
 
-	setup.sessionContext.UpdateSessionProperties(oauthrpa.connectionValues)
+	shared.sessionContext.UpdateSessionProperties(oauthrpa.connectionValues)
 
 	return nil
 }

@@ -14,18 +14,22 @@ import (
 
 type NegotiatorFactory func(driverCommon.DataBuffer) Negotiator
 type AuthenticatorFactory func() (Authenticator, error)
-type ConnectionInstantiatorSetup struct {
+
+// ConnectionInstantiatorCommon holds per-connection dependencies and preparation
+// shared by the normal and cookie connection instantiators.
+type ConnectionInstantiatorCommon struct {
 	negotiator          Negotiator
 	authenticator       Authenticator
 	dataBuffer          driverCommon.DataBuffer
 	ns                  driverCommon.NetworkSession
-	drvierConfig        *oracleconfig.OracleDriverConfig
+	driverConfig        *oracleconfig.OracleDriverConfig
 	newConnectionFunc   func(context.Context, *ttiShelf[driverCommon.MessageType], *driverCommon.SessionContext, driverCommon.NetworkSession) (*connection, error)
 	localizationService common.LocalizationService
 	providerRegistry    common.Registry[oracleProviders.Provider]
 }
 
-func NewConnectionInstantiatorSetup(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], negotiatorFactory NegotiatorFactory, authenticatorFactory AuthenticatorFactory) (*ConnectionInstantiatorSetup, error) {
+// NewConnectionInstantiatorCommon creates the dependencies shared by connection-establishment paths.
+func NewConnectionInstantiatorCommon(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], negotiatorFactory NegotiatorFactory, authenticatorFactory AuthenticatorFactory) (*ConnectionInstantiatorCommon, error) {
 	dataBuffer := ns.(driverCommon.DataBuffer)
 	localizationService := common.NewLocalizationService(config.Locale.ClientLanguage)
 
@@ -36,10 +40,10 @@ func NewConnectionInstantiatorSetup(config *oracleconfig.OracleDriverConfig, ns 
 		return nil, err
 	}
 
-	return &ConnectionInstantiatorSetup{
+	return &ConnectionInstantiatorCommon{
 		dataBuffer:          dataBuffer,
 		ns:                  ns,
-		drvierConfig:        config,
+		driverConfig:        config,
 		newConnectionFunc:   newConnection,
 		localizationService: localizationService,
 		providerRegistry:    providerRegistry,
@@ -49,44 +53,45 @@ func NewConnectionInstantiatorSetup(config *oracleconfig.OracleDriverConfig, ns 
 
 }
 
-func (setupInstantiator *ConnectionInstantiatorSetup) PrepareForAuthetication(sessCtx *driverCommon.SessionContext, shelf *ttiShelf[driverCommon.MessageType]) {
+// PrepareForAuthentication installs connection properties, callbacks, and authenticator dependencies.
+func (shared *ConnectionInstantiatorCommon) PrepareForAuthentication(sessCtx *driverCommon.SessionContext, shelf *ttiShelf[driverCommon.MessageType]) {
 	// After the session context is created, set client properties that will be needed
 	// by the client for authentication
-	sessCtx.GetClientProperties().SetProperty(driverCommon.RemoteAddress, setupInstantiator.ns.GetRemoteAddress())
-	sessCtx.GetClientProperties().SetProperty(driverCommon.RemotePort, setupInstantiator.ns.GetRemotePort())
-	sessCtx.GetClientProperties().SetProperty(driverCommon.ConnectDescriptor, setupInstantiator.drvierConfig.ConnectDescriptor)
+	sessCtx.GetClientProperties().SetProperty(driverCommon.RemoteAddress, shared.ns.GetRemoteAddress())
+	sessCtx.GetClientProperties().SetProperty(driverCommon.RemotePort, shared.ns.GetRemotePort())
+	sessCtx.GetClientProperties().SetProperty(driverCommon.ConnectDescriptor, shared.driverConfig.ConnectDescriptor)
 
 	// Add connection properties to shelf for downstream consumers
-	shelf.UpdateConnectionProperties(setupInstantiator.drvierConfig.DriverProperties)
-	shelf.RegisterLocalizationService(setupInstantiator.localizationService)
-	shelf.registerProviderRegistry(setupInstantiator.providerRegistry)
+	shelf.UpdateConnectionProperties(shared.driverConfig.DriverProperties)
+	shelf.RegisterLocalizationService(shared.localizationService)
+	shelf.registerProviderRegistry(shared.providerRegistry)
 
 	// register server to client piggyback callbacks
 	registerServerToClientPiggybacks(shelf, sessCtx)
 
 	// Initialise authenticator
 	//todo remember this are causing a problem of we use the properties before we actually set them
-	if authenticator, ok := setupInstantiator.authenticator.(ttiShelfUser); ok {
+	if authenticator, ok := shared.authenticator.(ttiShelfUser); ok {
 		authenticator.SetShelf(shelf)
 	}
-	if sessionContextUser, ok := setupInstantiator.authenticator.(SessionContextUser); ok {
+	if sessionContextUser, ok := shared.authenticator.(SessionContextUser); ok {
 		sessionContextUser.SetSessionContext(sessCtx)
 	}
 }
 
 // *** Negotiator Factory ***
 
-// GetNegotiator returns the default Negotiator implementation.
+// GetNegotiator selects normal, cookie, or server-requested re-negotiation.
 // TODO : we should not have to pass the buffer here...
-func GetNegotiator(transport driverCommon.DataBuffer, mode driverCommon.ConnectionMode, cookie *ttiCookie) Negotiator {
+func GetNegotiator(dataBuffer driverCommon.DataBuffer, mode driverCommon.ConnectionMode, cookie *ttiCookie) Negotiator {
 	var n Negotiator
 	switch mode {
 	case driverCommon.ConnectionCookie:
-		n = newCookieConnectionNegotiator(transport, cookie)
+		n = newCookieConnectionNegotiator(dataBuffer, cookie)
 	case driverCommon.ConnectionNormal:
-		n = newConnectionNegotiator(transport, false)
+		n = newConnectionNegotiator(dataBuffer, false)
 	case driverCommon.ConnectionRenegotiate:
-		n = newConnectionNegotiator(transport, true)
+		n = newConnectionNegotiator(dataBuffer, true)
 	}
 
 	return n

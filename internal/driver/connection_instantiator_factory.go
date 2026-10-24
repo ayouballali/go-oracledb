@@ -59,7 +59,7 @@ func GetConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns drive
 	if ttc.IsTTCCookieEligible(config.DriverProperties, databaseUUID) {
 		cookie, found := ttc.GetCachedTTCCookie(databaseUUID)
 		if found {
-			return ttc.NewTTCOptimizedConnectionInstantiator(
+			return ttc.NewTTCCookieConnectionInstantiator(
 				config,
 				ns,
 				providerRegistry,

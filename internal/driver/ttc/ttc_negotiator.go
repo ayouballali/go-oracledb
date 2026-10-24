@@ -49,19 +49,19 @@ import (
 
 // connectionNegotiator implements the Negotiator interface for TTC connections.
 type connectionNegotiator struct {
-	negotiationSetup *negotiationSetup
-	reneg            bool
+	shared                *connectionNegotiatorCommon
+	serverProtocolPending bool
 }
 
 // newConnectionNegotiator creates a new instance of connectionNegotiator.
-func newConnectionNegotiator(buf driverCommon.DataBuffer, reneg bool) *connectionNegotiator {
-	negotiation := &negotiationSetup{
+func newConnectionNegotiator(buf driverCommon.DataBuffer, serverProtocolPending bool) *connectionNegotiator {
+	shared := &connectionNegotiatorCommon{
 		_dataBuffer: buf,
 	}
 
 	return &connectionNegotiator{
-		negotiationSetup: negotiation,
-		reneg:            reneg,
+		shared:                shared,
+		serverProtocolPending: serverProtocolPending,
 	}
 }
 
@@ -69,14 +69,14 @@ func newConnectionNegotiator(buf driverCommon.DataBuffer, reneg bool) *connectio
 func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.SessionContext, *ttiShelf[driverCommon.MessageType], *ttiCookie, error) {
 	var pro *tTIpro
 	var dty *tTIdty
-	negoSetup := cn.negotiationSetup
+	shared := cn.shared
 
-	shelf, sessCtx, msgStmr, msgfactory := negoSetup.Init()
+	shelf, sessCtx, msgStmr, msgfactory := shared.initializeNegotiationResources()
 
 	// 4. Negotiate Protocol
 	var err error
-	if cn.reneg {
-		pro, err = cn._receiveTtiPro(ctx, msgStmr)
+	if cn.serverProtocolPending {
+		pro, err = cn.receiveProtocolResponse(ctx, msgStmr)
 	} else {
 		pro, err = cn._negotiateProtocol(ctx, msgStmr, msgfactory)
 	}
@@ -94,7 +94,7 @@ func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.Se
 		return nil, nil, nil, err
 	}
 
-	negoSetup.configureNegotiation(shelf, sessCtx, pro, dty)
+	shared.applyNegotiatedSettings(shelf, sessCtx, pro, dty)
 	// set timezone version number in session context
 	sessCtx.SetTimeZoneVersionNumber(dty.GetTimeZoneVersionNumber())
 	common.Odl.Fine("connectionNegotiator: Negotiation complete", "SessionContext", sessCtx, "Shelf", shelf)
@@ -104,7 +104,7 @@ func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.Se
 
 // SetDataBuffer Sets the data buffer used to create the marshaler within the negotiator
 func (cn *connectionNegotiator) SetDataBuffer(buf driverCommon.DataBuffer) {
-	cn.negotiationSetup._dataBuffer = buf
+	cn.shared._dataBuffer = buf
 }
 
 // _negotiateDatatype negotiates the datatype (TTIDTY) and returns the negotiated *ttc.tTIdty.
@@ -198,10 +198,10 @@ func (cn *connectionNegotiator) _negotiateProtocol(
 		return nil, common.NewOracleError(oracleErrors.NegotiatorError, err, nil)
 	}
 
-	return cn._receiveTtiPro(ctx, msgStmr)
+	return cn.receiveProtocolResponse(ctx, msgStmr)
 }
 
-func (cn *connectionNegotiator) _receiveTtiPro(ctx context.Context, msgStmr driverCommon.Streamer[driverCommon.MessageType]) (*tTIpro, error) {
+func (cn *connectionNegotiator) receiveProtocolResponse(ctx context.Context, msgStmr driverCommon.Streamer[driverCommon.MessageType]) (*tTIpro, error) {
 	msg, err := msgStmr.Pull(ctx, TTIPRO)
 	if err != nil {
 		common.Odl.Warn("msgStmr.Pull(TTIPRO) failed", "error", err)

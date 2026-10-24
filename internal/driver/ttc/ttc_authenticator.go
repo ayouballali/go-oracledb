@@ -52,7 +52,7 @@ const maxPasswordBytes = 1024
 
 // passwordAuthenticator authenticates using user/password O5 logon.
 type passwordAuthenticator struct {
-	setup *passwordAuthenticatorSetup
+	shared *passwordAuthenticatorCommon
 }
 
 // newPasswordAuthenticator instantiates a new password authenticator.
@@ -62,7 +62,7 @@ type passwordAuthenticator struct {
 //   - connectString : connectionString
 func newPasswordAuthenticator(username, password string, connectString string) *passwordAuthenticator {
 	username, proxyClient := parseUsername(username)
-	setup := &passwordAuthenticatorSetup{
+	shared := &passwordAuthenticatorCommon{
 		_connectString: connectString,
 		_username:      driverCommon.StringToB1Array(username),
 		_proxyClient:   driverCommon.StringToB1Array(proxyClient),
@@ -71,26 +71,26 @@ func newPasswordAuthenticator(username, password string, connectString string) *
 	}
 
 	return &passwordAuthenticator{
-		setup: setup,
+		shared: shared,
 	}
 }
 
 // SetSessionContext sets the session context to use within the authenticator.
 func (pa *passwordAuthenticator) SetSessionContext(sessCtx *driverCommon.SessionContext) {
-	pa.setup._sessionContext = sessCtx
+	pa.shared._sessionContext = sessCtx
 }
 
 // SetShelf sets the shelf to use within the authenticator.
 func (pa *passwordAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
-	pa.setup._shelf = *shelf
+	pa.shared._shelf = *shelf
 }
 
 // Authenticate performs authentication.
 func (pa *passwordAuthenticator) Authenticate(ctx context.Context) error {
-	setup := pa.setup
-	common.Odl.Fine("Authenticate start for user", "userName", setup._username)
+	shared := pa.shared
+	common.Odl.Fine("Authenticate start for user", "userName", shared._username)
 
-	if err := setup.validatePasswordLength(); err != nil {
+	if err := shared.validatePasswordLength(); err != nil {
 		return err
 	}
 
@@ -100,7 +100,7 @@ func (pa *passwordAuthenticator) Authenticate(ctx context.Context) error {
 		return common.NewOracleError(oracleErrors.AuthenticatorError, err, nil)
 	}
 
-	err = setup._doOAuth(ctx)
+	err = shared._doOAuth(ctx)
 	if err != nil {
 		common.Odl.Warn("Authentication failed, oauth keys exchange failed", "error", err)
 		return common.NewOracleError(oracleErrors.AuthenticatorError, err, nil)
@@ -111,11 +111,11 @@ func (pa *passwordAuthenticator) Authenticate(ctx context.Context) error {
 
 func (pa *passwordAuthenticator) _doOSESSKEY(ctx context.Context) error {
 	common.Odl.Fine("_doOSESSKEY start")
-	setup := pa.setup
-	shelf := setup._shelf
+	shared := pa.shared
+	shelf := shared._shelf
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
 
-	osesskey, err := setup.prepareOSESSKEY()
+	osesskey, err := shared.prepareOSESSKEY()
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (pa *passwordAuthenticator) _doOSESSKEY(ctx context.Context) error {
 		return common.NewOracleError(oracleErrors.InternalError, nil, nil)
 	}
 
-	setup._sessionContext.UpdateSessionProperties(osesskeyrpa.connectionValues)
+	shared._sessionContext.UpdateSessionProperties(osesskeyrpa.connectionValues)
 	common.Odl.Fine("_doOSESSKEY ended")
 	return nil
 

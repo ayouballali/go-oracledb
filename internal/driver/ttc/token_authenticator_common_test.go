@@ -65,7 +65,7 @@ func TestSignedTokenProviderGenerateTokenHeader(t *testing.T) {
 	sessContext.GetClientProperties().SetProperty(driverCommon.RemotePort, 1522)
 	sessContext.GetClientProperties().SetProperty(driverCommon.ConnectDescriptor, "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCPS)(HOST=adb.example.com)(PORT=1522))(CONNECT_DATA=(SERVICE_NAME=freepdb1)))")
 
-	setup := &tokenAuthenticatorSetup{
+	setup := &tokenAuthenticatorCommon{
 		tokenProvider:  mockSignedTokenAuthenticationProvider{},
 		sessionContext: sessContext,
 	}
@@ -97,7 +97,7 @@ func TestTokenAuthenticatorSignHeaderForSignedProvider(t *testing.T) {
 
 	keyPEM := encodePrivateKeyPEM(t, privateKey)
 	var tokenSeen string
-	setup := &tokenAuthenticatorSetup{
+	setup := &tokenAuthenticatorCommon{
 		tokenProvider: mockSignedTokenAuthenticationProvider{
 			privateKey: keyPEM,
 			tokenSeen:  &tokenSeen,
@@ -138,7 +138,7 @@ func encodePrivateKeyPEM(t *testing.T, privateKey *rsa.PrivateKey) []byte {
 func TestTokenAuthenticatorSignHeaderForOAuthProviderReturnsEmpty(t *testing.T) {
 	t.Parallel()
 
-	setup := &tokenAuthenticatorSetup{
+	setup := &tokenAuthenticatorCommon{
 		tokenProvider: mockTokenAuthenticationProvider{token: "token-value"},
 	}
 
@@ -228,7 +228,7 @@ func TestTokenAuthenticatorSignHeaderErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			setup := &tokenAuthenticatorSetup{tokenProvider: tt.provider}
+			setup := &tokenAuthenticatorCommon{tokenProvider: tt.provider}
 			if got := tokenAuthErrorCode(t, func() error {
 				_, err := setup.signHeader(context.Background(), "header", "token")
 				return err
@@ -247,7 +247,7 @@ func TestTokenAuthenticatorSignHeaderErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setup := &tokenAuthenticatorSetup{tokenProvider: mockSignedTokenAuthenticationProvider{privateKey: pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes})}}
+	setup := &tokenAuthenticatorCommon{tokenProvider: mockSignedTokenAuthenticationProvider{privateKey: pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyBytes})}}
 	if got := tokenAuthErrorCode(t, func() error {
 		_, err := setup.signHeader(context.Background(), "header", "token")
 		return err
@@ -272,13 +272,13 @@ func TestValidateJWTExpirationNonExpiredAndMalformed(t *testing.T) {
 	}
 }
 
-// TestTokenAuthenticatorSetupHeaderValidation verifies validation of the
+// TestTokenAuthenticatorCommonHeaderValidation verifies validation of the
 // session properties required to build a signed-token header.
-func TestTokenAuthenticatorSetupHeaderValidation(t *testing.T) {
+func TestTokenAuthenticatorCommonHeaderValidation(t *testing.T) {
 	t.Parallel()
 	sessionContext := driverCommon.NewSessionContext()
 
-	signed := &tokenAuthenticatorSetup{tokenProvider: mockSignedTokenAuthenticationProvider{}, sessionContext: sessionContext}
+	signed := &tokenAuthenticatorCommon{tokenProvider: mockSignedTokenAuthenticationProvider{}, sessionContext: sessionContext}
 	tests := []struct {
 		name string
 		set  func()

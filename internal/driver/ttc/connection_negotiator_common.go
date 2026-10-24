@@ -5,17 +5,21 @@ import (
 	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
 )
 
-type negotiationSetup struct {
+// connectionNegotiatorCommon provides resource creation and client configuration
+// shared by normal and cookie negotiation for one connection.
+type connectionNegotiatorCommon struct {
 	_dataBuffer driverCommon.DataBuffer
 }
 
-func (cn *negotiationSetup) Init() (*ttiShelf[driverCommon.MessageType], *driverCommon.SessionContext, *MessageStreamer, Factory) {
+// initializeNegotiationResources creates the shelf, session context, marshallers,
+// streamer, and initial message factory without exchanging negotiation messages.
+func (shared *connectionNegotiatorCommon) initializeNegotiationResources() (*ttiShelf[driverCommon.MessageType], *driverCommon.SessionContext, *MessageStreamer, Factory) {
 	common.Odl.Fine("connectionNegotiator: Negotiation start")
 	// 1. Create Shelf & Session Context
 	shelf, sessCtx := _createShelfAndSessionContext()
 
 	// 2. Fetch new Marshaller & TTC Msg Streamer
-	_createAndRegisterMarshallers(cn._dataBuffer, shelf)
+	_createAndRegisterMarshallers(shared._dataBuffer, shelf)
 	msgStmr := _createAndRegisterMessageStreamer(shelf)
 
 	// 3. Create and register Initial MessageFactory
@@ -24,7 +28,9 @@ func (cn *negotiationSetup) Init() (*ttiShelf[driverCommon.MessageType], *driver
 	return shelf, sessCtx, msgStmr, msgfactory
 }
 
-func (cn *negotiationSetup) configureNegotiation(shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, pro *tTIpro, dty *tTIdty) {
+// applyNegotiatedSettings installs the session character sets and the message
+// and codec factories for the negotiated TTC version.
+func (shared *connectionNegotiatorCommon) applyNegotiatedSettings(shelf *ttiShelf[driverCommon.MessageType], sessCtx *driverCommon.SessionContext, pro *tTIpro, dty *tTIdty) {
 	// The driver character set is hard-coded to AL32UTF8 because the Go client currently negotiates
 	// AL32UTF8 for cliRIN/cliROUT in TTIDTY and only supports that pairing.
 	sessCtx.SetSessionCharacterSets(
@@ -88,7 +94,8 @@ func _createAndRegisterCodecFactory(
 	common.Odl.Fine("connectionNegotiator: codecFactory created and registered")
 }
 
-// _createAndRegisterMarshaller creates a new marshaller and registers it to the shelf.
+// _createAndRegisterMarshallers registers the default marshaller and the native
+// marshaller used by negotiation messages, both using the connection buffer.
 func _createAndRegisterMarshallers(
 	buf driverCommon.DataBuffer,
 	shelf *ttiShelf[driverCommon.MessageType],

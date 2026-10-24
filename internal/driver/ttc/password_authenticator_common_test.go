@@ -100,9 +100,9 @@ func testPasswordAuthenticatorOAuthPacket(t *testing.T, login, proxyClient strin
 		"(DESCRIPTION=(ADDRESS=(HOST=localhost)(PORT=1521)(PROTOCOL=tcp))(CONNECT_DATA=(SERVICE_NAME=freepdb1)))")
 	pa.SetShelf(shelf)
 	pa.SetSessionContext(driverCommon.NewSessionContext())
-	pa.setup._sessionContext.UpdateSessionProperties(osrpaMsg.(*oSesskeyRPA).connectionValues)
+	pa.shared._sessionContext.UpdateSessionProperties(osrpaMsg.(*oSesskeyRPA).connectionValues)
 	requestStart := buf.currentWritePosition
-	if err := pa.setup._doOAuth(ctx); err != nil {
+	if err := pa.shared._doOAuth(ctx); err != nil {
 		sqlError, ok := err.(oracleErrors.SQLError)
 		if !ok {
 			t.Fatalf("expected error to be SQLError")
