@@ -13,9 +13,11 @@ type cookiePasswordAuthenticator struct {
 }
 
 func newCookiePasswordAuthenticator(username, password string, connectString string) *cookiePasswordAuthenticator {
+	username, proxyClient := parseUsername(username)
 	setup := &passwordAuthenticatorSetup{
 		_connectString: connectString,
-		_username:      driverCommon.StringToB1Array(sanitizeInputCredential(username)),
+		_username:      driverCommon.StringToB1Array(username),
+		_proxyClient:   driverCommon.StringToB1Array(proxyClient),
 		_password:      driverCommon.StringToB1Array(sanitizeInputCredential(password)),
 		_logonMode:     0,
 	}

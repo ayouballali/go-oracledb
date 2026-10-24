@@ -61,9 +61,11 @@ type passwordAuthenticator struct {
 //   - password : user password
 //   - connectString : connectionString
 func newPasswordAuthenticator(username, password string, connectString string) *passwordAuthenticator {
+	username, proxyClient := parseUsername(username)
 	setup := &passwordAuthenticatorSetup{
 		_connectString: connectString,
-		_username:      driverCommon.StringToB1Array(sanitizeInputCredential(username)),
+		_username:      driverCommon.StringToB1Array(username),
+		_proxyClient:   driverCommon.StringToB1Array(proxyClient),
 		_password:      driverCommon.StringToB1Array(sanitizeInputCredential(password)),
 		_logonMode:     0,
 	}

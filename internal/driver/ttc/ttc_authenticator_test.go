@@ -46,6 +46,55 @@ import (
 	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
 )
 
+// Verify that normal and cookie authentication initialize the username and proxy client.
+func TestNewPasswordAuthenticatorParsesProxy(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, input, user, client string
+	}{
+		{"plain", "SCOTT", "SCOTT", ""},
+		{"proxy", "SCOTT[HR]", "SCOTT", "HR"},
+		{"outer spaces", "  SCOTT[HR]  ", "SCOTT", "HR"},
+		{"quoted user", `"Scott Smith"[HR]`, "Scott Smith", "HR"},
+		{"quoted client", `SCOTT["Hr Smith"]`, "SCOTT", `"Hr Smith"`},
+		{"both quoted", `"Scott Smith"["Hr Smith"]`, "Scott Smith", `"Hr Smith"`},
+		{"quoted login with outer spaces", `  "Scott Smith"["Hr Smith"]  `, "Scott Smith", `"Hr Smith"`},
+		{"literal brackets", `"SCOTT[HR]"`, "SCOTT[HR]", ""},
+		{"quoted brackets", `"SCOTT[ONE]"["HR[TWO]"]`, "SCOTT[ONE]", `"HR[TWO]"`},
+		{"unicode", "代理[客户]", "代理", "客户"},
+		{"missing close", "SCOTT[HR", "SCOTT[HR", ""},
+		{"empty client", "SCOTT[]", "SCOTT[]", ""},
+		{"missing user", "[HR]", "[HR]", ""},
+		{"nested brackets", "SCOTT[HR[OTHER]]", "SCOTT[HR[OTHER]]", ""},
+		{"trailing text", "SCOTT[HR]OTHER", "SCOTT[HR]OTHER", ""},
+		{"unquoted space", "SCOTT[HR SMITH]", "SCOTT[HR SMITH]", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			const password = "password_test"
+			for _, authenticator := range []struct {
+				name  string
+				setup *passwordAuthenticatorSetup
+			}{
+				{"normal", newPasswordAuthenticator(tc.input, password, "connect").setup},
+				{"cookie", newCookiePasswordAuthenticator(tc.input, password, "connect").setup},
+			} {
+				t.Run(authenticator.name, func(t *testing.T) {
+					if got := string(authenticator.setup._username); got != tc.user {
+						t.Fatalf("username = %q, want %q", got, tc.user)
+					}
+					if got := string(authenticator.setup._proxyClient); got != tc.client {
+						t.Fatalf("proxy client = %q, want %q", got, tc.client)
+					}
+					if string(authenticator.setup._password) != password {
+						t.Fatal("username parsing changed the password")
+					}
+				})
+			}
+		})
+	}
+}
+
 // newAuthTestShelf wires a Shelf with:
 // - marshaller over an in-memory buffer
 // - Simple factory providing TTIFUN implementors for oSesskey and oauth

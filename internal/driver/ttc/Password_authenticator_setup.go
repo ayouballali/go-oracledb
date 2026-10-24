@@ -2,6 +2,7 @@ package ttc
 
 import (
 	"context"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -10,8 +11,26 @@ import (
 	oracleErrors "github.com/oracle/go-oracledb/v26/oracle/errors"
 )
 
+// A proxy login consists of two identifiers, either unquoted or double quoted.
+// Brackets within a quoted identifier are part of that identifier.
+var proxyUsernamePattern = regexp.MustCompile(`^("[^"\x00]+"|[\p{L}\p{M}\p{N}\p{Pc}$#]+)\[("[^"\x00]+"|[\p{L}\p{M}\p{N}\p{Pc}$#]+)\]$`)
+
+// parseUsername extracts the proxy client and sanitizes the authenticating username.
+// Unrecognized syntax is treated as an ordinary username.
+func parseUsername(username string) (string, string) {
+	var proxyClient string
+	// Parse before sanitizing to preserve quoted identifiers.
+	if parts := proxyUsernamePattern.FindStringSubmatch(strings.TrimSpace(username)); parts != nil {
+		username = parts[1]
+		// Preserve quotes on the proxy client.
+		proxyClient = parts[2]
+	}
+	return sanitizeInputCredential(username), proxyClient
+}
+
 type passwordAuthenticatorSetup struct {
 	_username                      driverCommon.B1Array
+	_proxyClient                   driverCommon.B1Array
 	_password                      driverCommon.B1Array
 	_logonMode                     int64
 	_shelf                         ttiShelf[driverCommon.MessageType]
@@ -103,6 +122,7 @@ func (pa *passwordAuthenticatorSetup) _doOAuth(ctx context.Context) error {
 
 	oauthMsg.(*oAuth).setPBKDF2Salt(sessionProperties.GetProperty(authPDKDF2CSKSalt).(*driverCommon.KeyValue).Value)
 	oauthMsg.(*oAuth).setUser(pa._username)
+	oauthMsg.(*oAuth).setProxyClient(pa._proxyClient)
 	oauthMsg.(*oAuth).setConnectString(pa._connectString)
 	oauthMsg.(*oAuth).setPBKDF2VgenCount(PBKDF2VgenCount)
 	oauthMsg.(*oAuth).setPBKDF2SderCount(PBKDF2SderCount)
