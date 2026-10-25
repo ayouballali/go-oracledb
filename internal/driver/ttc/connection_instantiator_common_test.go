@@ -45,6 +45,7 @@ import (
 	oracleconfig "github.com/oracle/go-oracledb/v26/oracle/config"
 )
 
+// TestAuthencationFactoryWithNilParameters verifies nil configuration is rejected.
 func TestAuthencationFactoryWithNilParameters(t *testing.T) {
 	t.Parallel()
 
@@ -57,6 +58,7 @@ func TestAuthencationFactoryWithNilParameters(t *testing.T) {
 	}
 }
 
+// TestAuthencationFactoryBasic verifies username/password configuration creates an authenticator.
 func TestAuthencationFactoryBasic(t *testing.T) {
 	t.Parallel()
 	c := oracleconfig.NewOracleDriverConfig()

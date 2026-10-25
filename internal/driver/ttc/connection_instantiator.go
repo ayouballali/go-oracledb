@@ -51,7 +51,7 @@ import (
 
 type connectionInstantiator struct {
 	shared      *ConnectionInstantiatorCommon
-	cookieCache *common.SafeLRUCache[*ttiCookie]
+	cookieCache *common.SafeLRUCache[*ttiCookie] // Shared cache, replaceable for test isolation.
 }
 
 // NewTTCConnectionInstantiator creates a new TTC connection instantiator.
@@ -60,6 +60,7 @@ type connectionInstantiator struct {
 //   - config: the Oracle driver configuration for the connection attempt.
 //   - ns: the established network session used by TTC.
 //   - providerRegistry: the provider registry available to the authenticator for this attempt.
+//   - mode: normal negotiation or fallback using the server's pending TTIPRO.
 //
 // Returns:
 //   - the TTC connection instantiator bound to ns.

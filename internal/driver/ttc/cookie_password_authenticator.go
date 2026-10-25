@@ -12,6 +12,7 @@ type cookiePasswordAuthenticator struct {
 	shared *passwordAuthenticatorCommon
 }
 
+// newCookiePasswordAuthenticator prepares password credentials for the cookie path.
 func newCookiePasswordAuthenticator(username, password string, connectString string) *cookiePasswordAuthenticator {
 	username, proxyClient := parseUsername(username)
 	shared := &passwordAuthenticatorCommon{
@@ -39,6 +40,8 @@ func newCookiePasswordAuthenticatorWithLogonMode(username, password string, mode
 	return pa
 }
 
+// Authenticate combines cookie negotiation with OSESSKEY, then completes password OAUTH.
+// It returns authentication errors or ErrTTIRENEG when normal fallback is required.
 func (pa *cookiePasswordAuthenticator) Authenticate(ctx context.Context) error {
 	shared := pa.shared
 	common.Odl.Fine("Authenticate start for user", "userName", shared._username)

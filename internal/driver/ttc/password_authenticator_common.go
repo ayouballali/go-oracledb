@@ -61,6 +61,8 @@ func (pa *passwordAuthenticatorCommon) validatePasswordLength() error {
 	return nil
 }
 
+// prepareOSESSKEY builds the first password-authentication request without sending it.
+// It returns an error if the message factory cannot create the request.
 func (pa *passwordAuthenticatorCommon) prepareOSESSKEY() (driverCommon.Message[driverCommon.MessageType], error) {
 	shelf := pa._shelf
 

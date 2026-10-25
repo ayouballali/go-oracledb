@@ -203,6 +203,8 @@ func (cn *connectionNegotiator) _negotiateProtocol(
 	return cn.receiveProtocolResponse(ctx, msgStmr)
 }
 
+// receiveProtocolResponse reads TTIPRO without sending a new protocol request.
+// It returns an error if reading fails or the response has an unexpected type.
 func (cn *connectionNegotiator) receiveProtocolResponse(ctx context.Context, msgStmr driverCommon.Streamer[driverCommon.MessageType]) (*tTIpro, error) {
 	msg, err := msgStmr.Pull(ctx, TTIPRO)
 	if err != nil {

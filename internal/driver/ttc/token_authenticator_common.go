@@ -30,6 +30,8 @@ type tokenAuthenticatorCommon struct {
 	tokenProvider  oracleProviders.TokenAuthenticationProvider
 }
 
+// prepareOAuth validates token credentials and builds OAUTH without sending it.
+// It returns token, signing, or message-creation errors.
 func (ta *tokenAuthenticatorCommon) prepareOAuth(ctx context.Context) (driverCommon.Message[driverCommon.MessageType], error) {
 	if ta.tokenProvider == nil {
 		return nil, common.NewOracleError(oracleErrors.NoAuthenticatorError, nil)

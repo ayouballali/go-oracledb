@@ -12,6 +12,7 @@ type cookieConnectionNegotiator struct {
 	cookie *ttiCookie
 }
 
+// newCookieConnectionNegotiator binds cached negotiation data to the connection buffer.
 func newCookieConnectionNegotiator(buf driverCommon.DataBuffer, cookie *ttiCookie) *cookieConnectionNegotiator {
 	shared := &connectionNegotiatorCommon{
 		_dataBuffer: buf,
@@ -22,6 +23,8 @@ func newCookieConnectionNegotiator(buf driverCommon.DataBuffer, cookie *ttiCooki
 	}
 }
 
+// Negotiate queues cookie negotiation and returns the prepared session and shelf.
+// It performs no I/O and returns no new cookie; queueing errors are propagated.
 func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.SessionContext, *ttiShelf[driverCommon.MessageType], *ttiCookie, error) {
 	shared := c.shared
 	shelf, sessCtx, msgStmr, _ := shared.initializeNegotiationResources()
@@ -80,6 +83,7 @@ func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommo
 	return sessCtx, shelf, nil, nil
 }
 
+// unregisterCookieNegotiationCallbacks removes setup-only DTY callbacks.
 func unregisterCookieNegotiationCallbacks(
 	msgStmr MessageStreamerInterface,
 ) {

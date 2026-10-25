@@ -12,7 +12,10 @@ import (
 	oracleProviders "github.com/oracle/go-oracledb/v26/oracle/providers"
 )
 
+// NegotiatorFactory lets shared setup create the path-specific negotiator.
 type NegotiatorFactory func(driverCommon.DataBuffer) Negotiator
+
+// AuthenticatorFactory lets shared setup create the path-specific authenticator.
 type AuthenticatorFactory func() (Authenticator, error)
 
 // ConnectionInstantiatorCommon holds per-connection dependencies and preparation
@@ -28,7 +31,8 @@ type ConnectionInstantiatorCommon struct {
 	providerRegistry    common.Registry[oracleProviders.Provider]
 }
 
-// NewConnectionInstantiatorCommon creates the dependencies shared by connection-establishment paths.
+// NewConnectionInstantiatorCommon creates shared dependencies using the supplied factories.
+// It returns an error if the authenticator cannot be created.
 func NewConnectionInstantiatorCommon(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], negotiatorFactory NegotiatorFactory, authenticatorFactory AuthenticatorFactory) (*ConnectionInstantiatorCommon, error) {
 	dataBuffer := ns.(driverCommon.DataBuffer)
 	localizationService := common.NewLocalizationService(config.Locale.ClientLanguage)
@@ -70,7 +74,6 @@ func (shared *ConnectionInstantiatorCommon) PrepareForAuthentication(sessCtx *dr
 	registerServerToClientPiggybacks(shelf, sessCtx)
 
 	// Initialise authenticator
-	//todo remember this are causing a problem of we use the properties before we actually set them
 	if authenticator, ok := shared.authenticator.(ttiShelfUser); ok {
 		authenticator.SetShelf(shelf)
 	}

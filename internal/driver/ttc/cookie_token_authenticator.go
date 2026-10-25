@@ -13,6 +13,7 @@ type cookieTokenAuthenticator struct {
 	shared *tokenAuthenticatorCommon
 }
 
+// newCookieTokenAuthenticator prepares the cookie path using the supplied token provider.
 func newCookieTokenAuthenticator(tokenProvider oracleProviders.TokenAuthenticationProvider) *cookieTokenAuthenticator {
 	shared := &tokenAuthenticatorCommon{
 		tokenProvider: tokenProvider,
@@ -22,6 +23,8 @@ func newCookieTokenAuthenticator(tokenProvider oracleProviders.TokenAuthenticati
 	}
 }
 
+// Authenticate combines cookie negotiation with token OAUTH.
+// It returns authentication errors or ErrTTIRENEG when normal fallback is required.
 func (ta *cookieTokenAuthenticator) Authenticate(ctx context.Context) error {
 	shared := ta.shared
 

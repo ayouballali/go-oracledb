@@ -15,6 +15,8 @@ type cookieConnectionInstantiator struct {
 	shared *ConnectionInstantiatorCommon
 }
 
+// NewTTCCookieConnectionInstantiator binds the cached cookie to the existing network session.
+// It returns an error if the authentication dependencies cannot be created.
 func NewTTCCookieConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], cookie *ttiCookie) (*cookieConnectionInstantiator, error) {
 
 	createNegotiator := func(buffer driverCommon.DataBuffer) Negotiator {
@@ -43,6 +45,8 @@ func NewTTCCookieConnectionInstantiator(config *oracleconfig.OracleDriverConfig,
 	}, nil
 }
 
+// GetConnection completes cookie negotiation and authentication, returning the connection
+// or an error. ErrTTIRENEG tells the connector to fall back to normal negotiation.
 func (ci *cookieConnectionInstantiator) GetConnection(ctx context.Context) (driver.Conn, error) {
 	shared := ci.shared
 	negotiator := ci.shared.negotiator

@@ -38,9 +38,6 @@ func (shared *connectionNegotiatorCommon) applyNegotiatedSettings(shelf *ttiShel
 		pro.getNCharCharacterSet(),
 	)
 
-	// Both marshallers were registered in step 2; message type selects the encoding.
-	// No marshaller replacement is needed after datatype negotiation.
-
 	// Determine negotiated TTC version (minimum of client and server)
 	clientVersion := dty.GetClientTTCVersion()
 	serverVersion := shelf.GetCapabilities()[kpccapCtTtcFldVsn].Value

@@ -70,6 +70,7 @@ type OracleDriverProperties struct {
 	// The default is 32 MiB.
 	DefaultLobPrefetchSize int `default:"33554432" validator:"validateZeroOrPositive"  help:"default prefetch size"`
 
+	// TTCCookieOptimizationEnabled reuses cached TTC negotiation data; enabled by default.
 	TTCCookieOptimizationEnabled bool `default:"true" validator:"validateBoolean" help:"enables TTC cookie optimization"`
 }
 
@@ -85,6 +86,7 @@ func (config OracleDriverProperties) GetDefaultLobPrefetchSize() int {
 	return config.DefaultLobPrefetchSize
 }
 
+// IsTTCCookieOptimizationEnabled reports whether TTC cookie optimization is enabled.
 func (config OracleDriverProperties) IsTTCCookieOptimizationEnabled() bool {
 	return config.TTCCookieOptimizationEnabled
 }

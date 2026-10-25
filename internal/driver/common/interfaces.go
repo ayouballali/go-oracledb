@@ -48,12 +48,13 @@ const (
 	NSFIMM = 0x0040 // non graceful disconnect
 )
 
+// ConnectionMode selects the connection-establishment flow.
 type ConnectionMode uint8
 
 const (
-	ConnectionNormal ConnectionMode = iota
-	ConnectionRenegotiate
-	ConnectionCookie
+	ConnectionNormal      ConnectionMode = iota // Normal TTC negotiation and authentication.
+	ConnectionRenegotiate                       // Consume pending server TTIPRO after TTIRENEG.
+	ConnectionCookie                            // Reuse cached TTC negotiation data.
 )
 
 // NetworkSession implementors can disconnect a network connection
@@ -80,6 +81,7 @@ type NetworkSession interface {
 	// otherwise.
 	GetRemotePort() int
 
+	// GetDatabaseUUID returns the server-provided database UUID, or an empty string.
 	GetDatabaseUUID() string
 }
 

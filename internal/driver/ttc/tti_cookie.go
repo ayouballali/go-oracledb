@@ -54,8 +54,6 @@ const zeroByte = 0
 // LRU cache for TTC cookies
 var ttcCookieCache = common.NewSafeLRUCache[*ttiCookie](50)
 
-// TODO(design): Validate cache ownership, size, eviction, and concurrent-connection behavior.
-
 type ttiCookie struct {
 	connectionProtocolVersion       driverCommon.UB2
 	databaseCharSet                 driverCommon.UB2
@@ -66,6 +64,7 @@ type ttiCookie struct {
 	databasePortage                 driverCommon.B1Array
 }
 
+// newTTICookieFromTTIpro copies negotiated server values into an independent cookie.
 func newTTICookieFromTTIpro(pro *tTIpro) *ttiCookie {
 	return &ttiCookie{
 		connectionProtocolVersion:       pro.proSvrVer,
@@ -78,10 +77,12 @@ func newTTICookieFromTTIpro(pro *tTIpro) *ttiCookie {
 	}
 }
 
+// GetMsgCode identifies the TTC cookie message.
 func (c *ttiCookie) GetMsgCode() driverCommon.MessageType {
 	return TTICOOKIE
 }
 
+// MarshalTo writes the cookie payload and returns any marshalling error.
 func (c *ttiCookie) MarshalTo(ctx context.Context, mar driverCommon.Marshaller) error {
 	if err := mar.MarshalUB1(ctx, driverCommon.UB1(ttiCookieVersion)); err != nil {
 		return err
@@ -130,10 +131,13 @@ func (c *ttiCookie) MarshalTo(ctx context.Context, mar driverCommon.Marshaller) 
 	return mar.MarshalB1Array(ctx, c.databaseRuntimeCapabilities)
 }
 
+// GetCachedTTCCookie returns the cookie for the database UUID and whether it exists.
 func GetCachedTTCCookie(databaseUUID string) (*ttiCookie, bool) {
 	cookie, found := ttcCookieCache.Get(databaseUUID)
 	return cookie, found && cookie != nil
 }
+
+// newProtocolMessage reconstructs PRO and its client capabilities from cached values.
 func (c *ttiCookie) newProtocolMessage() *tTIpro {
 	pro := newTTIpro().(*tTIpro)
 	pro.proSvrVer = c.connectionProtocolVersion
@@ -147,6 +151,7 @@ func (c *ttiCookie) newProtocolMessage() *tTIpro {
 	return pro
 }
 
+// IsTTCCookieEligible requires optimization to be enabled and a nonblank database UUID.
 func IsTTCCookieEligible(
 	properties oracleconfig.OracleDriverProperties,
 	databaseUUID string,

@@ -98,7 +98,6 @@ type oracleConnector = connector
 // This is the main entry point for database/sql to acquire an Oracle database Connector.
 func buildOracleConnector(driver driver.Driver, cfg *naming.ParsedConfig, drvConfig *oracleconfig.OracleDriverConfig) driver.Connector {
 	// this should never return an error, both functions are being set to not nil values
-	// here we register the factory
 	connector, _ := newOracleConnector(cfg, drvConfig, session.ConnectToOptionWithConnectionID, drv.GetConnectionInstantiator)
 	return connector
 }
@@ -144,7 +143,6 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	// clean-up function that will close network session if the connection could
 	// not be established and the network session was created
 	defer func() {
-		// pay attention to this
 		if !isConnectionEstablished {
 			if isNsConnected {
 				ns.Disconnect(ctx, 0)
@@ -205,7 +203,6 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	}
 
 	common.OdlT(sessionUid).Fine("Network session established")
-	// here we call the factory
 
 	connInstantiator, err := c.connInstantiatorFactory(c.connectorConfig, ns, c.providerRegistry, false)
 	if err != nil {
