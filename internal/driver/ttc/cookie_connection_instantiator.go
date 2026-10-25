@@ -13,7 +13,6 @@ import (
 
 type cookieConnectionInstantiator struct {
 	shared *ConnectionInstantiatorCommon
-	cookie *ttiCookie
 }
 
 func NewTTCCookieConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], cookie *ttiCookie) (*cookieConnectionInstantiator, error) {

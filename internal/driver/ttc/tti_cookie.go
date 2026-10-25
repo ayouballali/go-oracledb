@@ -56,10 +56,6 @@ var ttcCookieCache = common.NewSafeLRUCache[*ttiCookie](50)
 
 // TODO(design): Validate cache ownership, size, eviction, and concurrent-connection behavior.
 
-// TODO(design): Reconsider adding explicit native UB2 helpers, matching JDBC's
-// marshalNativeUB2(value, isLSB). If appropriate, this may let fixed-format TTC
-// negotiation fields avoid marshaller switching; validate the full flow in the spec.
-
 type ttiCookie struct {
 	connectionProtocolVersion       driverCommon.UB2
 	databaseCharSet                 driverCommon.UB2

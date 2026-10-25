@@ -635,7 +635,6 @@ func TestOAuth_validateKeySizeForOAUTH_Failure(t *testing.T) {
 }
 
 // TestOAuth_sanitizeInputCredential tests credential sanitization.
-// TODO: Move this shared credential test to password_authenticator_setup_test.go.
 func TestOAuth_sanitizeInputCredential(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -659,7 +658,6 @@ func TestOAuth_sanitizeInputCredential(t *testing.T) {
 	}
 }
 
-// TODO: Move this shared validation test to password_authenticator_setup_test.go.
 func TestPasswordAuthenticatorValidatePasswordLength(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
