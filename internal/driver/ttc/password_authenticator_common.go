@@ -42,6 +42,16 @@ type passwordAuthenticatorCommon struct {
 	_logonHelper                   *o5Logon
 }
 
+// SetSessionContext sets the session context to use within the authenticator.
+func (pa *passwordAuthenticatorCommon) SetSessionContext(sessCtx *driverCommon.SessionContext) {
+	pa._sessionContext = sessCtx
+}
+
+// SetShelf sets the shelf to use within the authenticator.
+func (pa *passwordAuthenticatorCommon) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
+	pa._shelf = *shelf
+}
+
 // newPasswordAuthenticatorWithLogonMode instantiates a new password authenticator.
 // Parameters:
 //   - username : the username
@@ -50,7 +60,7 @@ type passwordAuthenticatorCommon struct {
 //   - mode : logonMode
 func newPasswordAuthenticatorWithLogonMode(username, password string, mode common.LogonMode, connectString string) *passwordAuthenticator {
 	pa := newPasswordAuthenticator(username, password, connectString)
-	pa.shared._logonMode = mode.Value()
+	pa._logonMode = mode.Value()
 	return pa
 }
 

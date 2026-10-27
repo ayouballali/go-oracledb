@@ -82,9 +82,9 @@ func TestNewTTCConnectionInstantiatorNegotiationMode(t *testing.T) {
 			if !ok {
 				t.Fatalf("instantiator type = %T, want *connectionInstantiator", instantiator)
 			}
-			negotiator, ok := ci.shared.negotiator.(*connectionNegotiator)
+			negotiator, ok := ci.negotiator.(*connectionNegotiator)
 			if !ok {
-				t.Fatalf("negotiator type = %T, want *connectionNegotiator", ci.shared.negotiator)
+				t.Fatalf("negotiator type = %T, want *connectionNegotiator", ci.negotiator)
 			}
 			if negotiator.serverProtocolPending != tc.wantReneg {
 				t.Fatalf("negotiator serverProtocolPending = %t, want %t", negotiator.serverProtocolPending, tc.wantReneg)
@@ -146,7 +146,7 @@ func TestGetConnection(t *testing.T) {
 			}
 			ci := &connectionInstantiator{
 				cookieCache: common.NewSafeLRUCache[*ttiCookie](50),
-				shared: &ConnectionInstantiatorCommon{
+				connectionInstantiatorCommon: &connectionInstantiatorCommon{
 					negotiator: &mockNegotiator{
 						sessCtx: driverCommon.NewSessionContext(),
 						shelf:   shelf,
@@ -231,7 +231,7 @@ func TestGetConnectionUsesInjectedCookieCache(t *testing.T) {
 			shelf.RegisterMessageFactory(&mockFactory{returnMsg: NewOall18()})
 			ci := &connectionInstantiator{
 				cookieCache: cache,
-				shared: &ConnectionInstantiatorCommon{
+				connectionInstantiatorCommon: &connectionInstantiatorCommon{
 					negotiator: &mockNegotiator{
 						sessCtx: driverCommon.NewSessionContext(),
 						shelf:   shelf,
@@ -276,7 +276,7 @@ func TestGetConnectionMissingLocalizationService(t *testing.T) {
 
 	ci := &connectionInstantiator{
 		cookieCache: common.NewSafeLRUCache[*ttiCookie](50),
-		shared: &ConnectionInstantiatorCommon{
+		connectionInstantiatorCommon: &connectionInstantiatorCommon{
 			negotiator: &mockNegotiator{
 				sessCtx: driverCommon.NewSessionContext(),
 				shelf:   shelf,

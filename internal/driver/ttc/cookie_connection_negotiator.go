@@ -8,7 +8,7 @@ import (
 )
 
 type cookieConnectionNegotiator struct {
-	shared *connectionNegotiatorCommon
+	*connectionNegotiatorCommon
 	cookie *ttiCookie
 }
 
@@ -18,16 +18,15 @@ func newCookieConnectionNegotiator(buf driverCommon.DataBuffer, cookie *ttiCooki
 		_dataBuffer: buf,
 	}
 	return &cookieConnectionNegotiator{
-		shared: shared,
-		cookie: cookie,
+		connectionNegotiatorCommon: shared,
+		cookie:                     cookie,
 	}
 }
 
 // Negotiate queues cookie negotiation and returns the prepared session and shelf.
 // It performs no I/O and returns no new cookie; queueing errors are propagated.
 func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.SessionContext, *ttiShelf[driverCommon.MessageType], *ttiCookie, error) {
-	shared := c.shared
-	shelf, sessCtx, msgStmr, _ := shared.initializeNegotiationResources()
+	shelf, sessCtx, msgStmr, _ := c.initializeNegotiationResources()
 	pro := c.cookie.newProtocolMessage()
 	// Register negotiated server capabilities
 	shelf.RegisterCapabilities(pro.serverCaps.toMap())
@@ -54,7 +53,7 @@ func (c cookieConnectionNegotiator) Negotiate(ctx context.Context) (*driverCommo
 	}
 	common.Odl.Fine("cookieConnectionNegotiator: TTIPRO, TTICOOKIE, and TTIDTY queued for the first authentication request")
 
-	shared.applyNegotiatedSettings(shelf, sessCtx, pro, dty)
+	c.applyNegotiatedSettings(shelf, sessCtx, pro, dty)
 
 	prepareDTYResponse := func(header *messageHeader) (driverCommon.Message[driverCommon.MessageType], error) {
 		msg, err := shelf.GetMessageFactory().(Factory).GetMessage(TTIDTY)

@@ -554,12 +554,12 @@ func TestTokenAuthenticatorSetters(t *testing.T) {
 	shelf, _, _ := newAuthTestShelf(1 << 12)
 	authenticator := newTokenAuthenticator(mockTokenAuthenticationProvider{})
 	authenticator.SetShelf(shelf)
-	if authenticator.shared.shelf.GetMessageFactory() == nil {
+	if authenticator.shelf.GetMessageFactory() == nil {
 		t.Fatal("SetShelf did not store the shelf")
 	}
 	sessionContext := driverCommon.NewSessionContext()
 	authenticator.SetSessionContext(sessionContext)
-	if authenticator.shared.sessionContext != sessionContext {
+	if authenticator.sessionContext != sessionContext {
 		t.Fatal("SetSessionContext did not store the session context")
 	}
 }

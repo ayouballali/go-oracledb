@@ -83,13 +83,13 @@ func TestConnectionSetupAppliesLobPrefetchAfterNegotiation(t *testing.T) {
 	shelf, sessionContext, _, _ := negotiation.initializeNegotiationResources()
 	config := oracleconfig.NewOracleDriverConfig()
 	config.DriverProperties.DefaultLobPrefetchSize = 8192
-	setup := &ConnectionInstantiatorCommon{
+	setup := &connectionInstantiatorCommon{
 		ns:            &mockNetworkSession{},
 		driverConfig:  config,
 		authenticator: &mockAuthenticator{},
 	}
 
-	setup.PrepareForAuthentication(sessionContext, shelf)
+	setup.prepareForAuthentication(sessionContext, shelf)
 
 	for _, messageType := range []driverCommon.MessageType{TTIFUN, TTIPRO} {
 		marshaller := shelf.GetMarshallerForMessageType(messageType).(*MarshalEngine)

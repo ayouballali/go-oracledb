@@ -90,7 +90,7 @@ func newCookieInstantiatorTestSetup() *cookieInstantiatorTestSetup {
 	authenticator := &mockCookieConnectionAuthenticator{streamer: streamer}
 	connectionFactory := &mockCookieConnectionFactory{connection: &connection{}}
 	instantiator := &cookieConnectionInstantiator{
-		shared: &ConnectionInstantiatorCommon{
+		connectionInstantiatorCommon: &connectionInstantiatorCommon{
 			negotiator:          negotiator,
 			authenticator:       authenticator,
 			ns:                  &mockNetworkSession{},
@@ -158,7 +158,7 @@ func TestNewTTCCookieConnectionInstantiator(t *testing.T) {
 			if err != nil {
 				t.Fatalf("create cookie connection instantiator: %v", err)
 			}
-			setup := instantiator.shared
+			setup := instantiator.connectionInstantiatorCommon
 			negotiator, ok := setup.negotiator.(*cookieConnectionNegotiator)
 			if !ok {
 				t.Fatalf("negotiator type = %T, want *cookieConnectionNegotiator", setup.negotiator)

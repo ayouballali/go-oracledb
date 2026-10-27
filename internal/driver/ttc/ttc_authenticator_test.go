@@ -76,8 +76,8 @@ func TestNewPasswordAuthenticatorParsesProxy(t *testing.T) {
 				name   string
 				shared *passwordAuthenticatorCommon
 			}{
-				{"normal", newPasswordAuthenticator(tc.input, password, "connect").shared},
-				{"cookie", newCookiePasswordAuthenticator(tc.input, password, "connect").shared},
+				{"normal", newPasswordAuthenticator(tc.input, password, "connect").passwordAuthenticatorCommon},
+				{"cookie", newCookiePasswordAuthenticator(tc.input, password, "connect").passwordAuthenticatorCommon},
 			} {
 				t.Run(authenticator.name, func(t *testing.T) {
 					if got := string(authenticator.shared._username); got != tc.user {

@@ -4,13 +4,12 @@ import (
 	"context"
 
 	"github.com/oracle/go-oracledb/v26/internal/common"
-	driverCommon "github.com/oracle/go-oracledb/v26/internal/driver/common"
 	oracleErrors "github.com/oracle/go-oracledb/v26/oracle/errors"
 	oracleProviders "github.com/oracle/go-oracledb/v26/oracle/providers"
 )
 
 type cookieTokenAuthenticator struct {
-	shared *tokenAuthenticatorCommon
+	*tokenAuthenticatorCommon
 }
 
 // newCookieTokenAuthenticator prepares the cookie path using the supplied token provider.
@@ -19,23 +18,21 @@ func newCookieTokenAuthenticator(tokenProvider oracleProviders.TokenAuthenticati
 		tokenProvider: tokenProvider,
 	}
 	return &cookieTokenAuthenticator{
-		shared: shared,
+		tokenAuthenticatorCommon: shared,
 	}
 }
 
 // Authenticate combines cookie negotiation with token OAUTH.
 // It returns authentication errors or ErrTTIRENEG when normal fallback is required.
 func (ta *cookieTokenAuthenticator) Authenticate(ctx context.Context) error {
-	shared := ta.shared
-
 	common.Odl.Debug("Start TOKEN authentication")
 
-	msg, err := shared.prepareOAuth(ctx)
+	msg, err := ta.prepareOAuth(ctx)
 	if err != nil {
 		return err
 	}
 
-	shelf := shared.shelf
+	shelf := ta.shelf
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
 	// send oauth message
 	if err := streamer.Push(ctx, msg); err != nil {
@@ -49,25 +46,7 @@ func (ta *cookieTokenAuthenticator) Authenticate(ctx context.Context) error {
 		return err
 	}
 	oauthrpa := response.(*OAuthRPA)
-	shared.sessionContext.UpdateSessionProperties(oauthrpa.connectionValues)
+	ta.sessionContext.UpdateSessionProperties(oauthrpa.connectionValues)
 
 	return nil
-}
-
-// SetShelf stores the TTC shelf used to create and exchange authentication
-// messages.
-//
-// Parameters:
-//   - shelf: the TTC shelf bound to the current connection attempt.
-func (ta *cookieTokenAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
-	ta.shared.shelf = *shelf
-}
-
-// SetSessionContext stores the session context used during token
-// authentication.
-//
-// Parameters:
-//   - sessCtx: the session context associated with the current connection attempt.
-func (ta *cookieTokenAuthenticator) SetSessionContext(sessCtx *driverCommon.SessionContext) {
-	ta.shared.sessionContext = sessCtx
 }

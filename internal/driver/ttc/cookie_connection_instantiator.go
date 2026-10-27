@@ -12,7 +12,7 @@ import (
 )
 
 type cookieConnectionInstantiator struct {
-	shared *ConnectionInstantiatorCommon
+	*connectionInstantiatorCommon
 }
 
 // NewTTCCookieConnectionInstantiator binds the cached cookie to the existing network session.
@@ -35,31 +35,28 @@ func NewTTCCookieConnectionInstantiator(config *oracleconfig.OracleDriverConfig,
 		)
 	}
 
-	shared, err := NewConnectionInstantiatorCommon(config, ns, providerRegistry, createNegotiator, createAuthenticator)
+	shared, err := newConnectionInstantiatorCommon(config, ns, providerRegistry, createNegotiator, createAuthenticator)
 	if err != nil {
 		return nil, err
 	}
 
 	return &cookieConnectionInstantiator{
-		shared: shared,
+		connectionInstantiatorCommon: shared,
 	}, nil
 }
 
 // GetConnection completes cookie negotiation and authentication, returning the connection
 // or an error. ErrTTIRENEG tells the connector to fall back to normal negotiation.
 func (ci *cookieConnectionInstantiator) GetConnection(ctx context.Context) (driver.Conn, error) {
-	shared := ci.shared
-	negotiator := ci.shared.negotiator
-	authenticator := ci.shared.authenticator
-	if shared.localizationService == nil {
+	if ci.localizationService == nil {
 		return nil, common.NewOracleError(oracleErrors.MissingLocalizationService, nil)
 	}
 
 	// Queue cookie negotiation messages and prepare the cached session settings.
 	// The authenticator sends and reads the combined exchange.
-	sessCtx, shelf, _, err := negotiator.Negotiate(ctx)
+	sessCtx, shelf, _, err := ci.negotiator.Negotiate(ctx)
 	if err != nil {
-		return nil, shared.localizationService.LocalizeError(err)
+		return nil, ci.localizationService.LocalizeError(err)
 	}
 
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
@@ -67,10 +64,10 @@ func (ci *cookieConnectionInstantiator) GetConnection(ctx context.Context) (driv
 	// including when authentication returns an error or requests fallback.
 	defer unregisterCookieNegotiationCallbacks(streamer)
 
-	shared.PrepareForAuthentication(sessCtx, shelf)
+	ci.prepareForAuthentication(sessCtx, shelf)
 
 	// Authenticate
-	err = authenticator.Authenticate(ctx)
+	err = ci.authenticator.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -78,5 +75,5 @@ func (ci *cookieConnectionInstantiator) GetConnection(ctx context.Context) (driv
 	sessCtx.GetSessionProperties().Snapshot()
 
 	common.Odl.Debug("Connect end")
-	return shared.newConnectionFunc(ctx, shelf, sessCtx, shared.ns)
+	return ci.newConnectionFunc(ctx, shelf, sessCtx, ci.ns)
 }

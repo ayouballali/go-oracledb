@@ -50,7 +50,7 @@ import (
 )
 
 type connectionInstantiator struct {
-	shared      *ConnectionInstantiatorCommon
+	*connectionInstantiatorCommon
 	cookieCache *common.SafeLRUCache[*ttiCookie] // Shared cache, replaceable for test isolation.
 }
 
@@ -82,15 +82,15 @@ func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns dr
 		)
 	}
 
-	shared, err := NewConnectionInstantiatorCommon(config, ns, providerRegistry, createNegotiator, createAuthenticator)
+	shared, err := newConnectionInstantiatorCommon(config, ns, providerRegistry, createNegotiator, createAuthenticator)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &connectionInstantiator{
-		shared:      shared,
-		cookieCache: ttcCookieCache,
+		connectionInstantiatorCommon: shared,
+		cookieCache:                  ttcCookieCache,
 	}, nil
 }
 
@@ -104,28 +104,25 @@ func NewTTCConnectionInstantiator(config *oracleconfig.OracleDriverConfig, ns dr
 //   - the established driver connection.
 //   - an error if negotiation, authentication, or connection creation fails.
 func (ci *connectionInstantiator) GetConnection(ctx context.Context) (driver.Conn, error) {
-	shared := ci.shared
-	negotiator := ci.shared.negotiator
-	authenticator := ci.shared.authenticator
-	databaseUUID := shared.ns.GetDatabaseUUID()
+	databaseUUID := ci.ns.GetDatabaseUUID()
 
-	if shared.localizationService == nil {
+	if ci.localizationService == nil {
 		return nil, common.NewOracleError(oracleErrors.MissingLocalizationService, nil)
 	}
 
 	// Perform wire negotiation; capture session context, shelf and capability
-	sessCtx, shelf, cookie, err := negotiator.Negotiate(ctx)
+	sessCtx, shelf, cookie, err := ci.negotiator.Negotiate(ctx)
 	if err != nil {
-		return nil, shared.localizationService.LocalizeError(err)
+		return nil, ci.localizationService.LocalizeError(err)
 	}
-	if IsTTCCookieEligible(shared.driverConfig.DriverProperties, databaseUUID) {
+	if IsTTCCookieEligible(ci.driverConfig.DriverProperties, databaseUUID) {
 		ci.cookieCache.Put(databaseUUID, cookie)
 	}
 
-	shared.PrepareForAuthentication(sessCtx, shelf)
+	ci.prepareForAuthentication(sessCtx, shelf)
 
 	// Authenticate
-	err = authenticator.Authenticate(ctx)
+	err = ci.authenticator.Authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -134,5 +131,5 @@ func (ci *connectionInstantiator) GetConnection(ctx context.Context) (driver.Con
 	sessCtx.GetSessionProperties().Snapshot()
 
 	common.Odl.Debug("Connect end")
-	return shared.newConnectionFunc(ctx, shelf, sessCtx, shared.ns)
+	return ci.newConnectionFunc(ctx, shelf, sessCtx, ci.ns)
 }

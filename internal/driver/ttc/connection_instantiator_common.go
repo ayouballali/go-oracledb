@@ -12,15 +12,15 @@ import (
 	oracleProviders "github.com/oracle/go-oracledb/v26/oracle/providers"
 )
 
-// NegotiatorFactory lets shared setup create the path-specific negotiator.
-type NegotiatorFactory func(driverCommon.DataBuffer) Negotiator
+// negotiatorFactory lets shared setup create the path-specific negotiator.
+type negotiatorFactory func(driverCommon.DataBuffer) Negotiator
 
-// AuthenticatorFactory lets shared setup create the path-specific authenticator.
-type AuthenticatorFactory func() (Authenticator, error)
+// authenticatorFactory lets shared setup create the path-specific authenticator.
+type authenticatorFactory func() (Authenticator, error)
 
-// ConnectionInstantiatorCommon holds per-connection dependencies and preparation
+// connectionInstantiatorCommon holds per-connection dependencies and preparation
 // shared by the normal and cookie connection instantiators.
-type ConnectionInstantiatorCommon struct {
+type connectionInstantiatorCommon struct {
 	negotiator          Negotiator
 	authenticator       Authenticator
 	dataBuffer          driverCommon.DataBuffer
@@ -31,9 +31,9 @@ type ConnectionInstantiatorCommon struct {
 	providerRegistry    common.Registry[oracleProviders.Provider]
 }
 
-// NewConnectionInstantiatorCommon creates shared dependencies using the supplied factories.
+// newConnectionInstantiatorCommon creates shared dependencies using the supplied factories.
 // It returns an error if the authenticator cannot be created.
-func NewConnectionInstantiatorCommon(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], negotiatorFactory NegotiatorFactory, authenticatorFactory AuthenticatorFactory) (*ConnectionInstantiatorCommon, error) {
+func newConnectionInstantiatorCommon(config *oracleconfig.OracleDriverConfig, ns driverCommon.NetworkSession, providerRegistry common.Registry[oracleProviders.Provider], negotiatorFactory negotiatorFactory, authenticatorFactory authenticatorFactory) (*connectionInstantiatorCommon, error) {
 	dataBuffer := ns.(driverCommon.DataBuffer)
 	localizationService := common.NewLocalizationService(config.Locale.ClientLanguage)
 
@@ -44,7 +44,7 @@ func NewConnectionInstantiatorCommon(config *oracleconfig.OracleDriverConfig, ns
 		return nil, err
 	}
 
-	return &ConnectionInstantiatorCommon{
+	return &connectionInstantiatorCommon{
 		dataBuffer:          dataBuffer,
 		ns:                  ns,
 		driverConfig:        config,
@@ -57,8 +57,8 @@ func NewConnectionInstantiatorCommon(config *oracleconfig.OracleDriverConfig, ns
 
 }
 
-// PrepareForAuthentication installs connection properties, callbacks, and authenticator dependencies.
-func (shared *ConnectionInstantiatorCommon) PrepareForAuthentication(sessCtx *driverCommon.SessionContext, shelf *ttiShelf[driverCommon.MessageType]) {
+// prepareForAuthentication installs connection properties, callbacks, and authenticator dependencies.
+func (shared *connectionInstantiatorCommon) prepareForAuthentication(sessCtx *driverCommon.SessionContext, shelf *ttiShelf[driverCommon.MessageType]) {
 	// After the session context is created, set client properties that will be needed
 	// by the client for authentication
 	sessCtx.GetClientProperties().SetProperty(driverCommon.RemoteAddress, shared.ns.GetRemoteAddress())

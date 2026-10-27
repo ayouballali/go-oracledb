@@ -49,7 +49,7 @@ import (
 
 // connectionNegotiator implements the Negotiator interface for TTC connections.
 type connectionNegotiator struct {
-	shared                *connectionNegotiatorCommon
+	*connectionNegotiatorCommon
 	serverProtocolPending bool
 }
 
@@ -60,8 +60,8 @@ func newConnectionNegotiator(buf driverCommon.DataBuffer, serverProtocolPending 
 	}
 
 	return &connectionNegotiator{
-		shared:                shared,
-		serverProtocolPending: serverProtocolPending,
+		connectionNegotiatorCommon: shared,
+		serverProtocolPending:      serverProtocolPending,
 	}
 }
 
@@ -69,9 +69,7 @@ func newConnectionNegotiator(buf driverCommon.DataBuffer, serverProtocolPending 
 func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.SessionContext, *ttiShelf[driverCommon.MessageType], *ttiCookie, error) {
 	var pro *tTIpro
 	var dty *tTIdty
-	shared := cn.shared
-
-	shelf, sessCtx, msgStmr, msgfactory := shared.initializeNegotiationResources()
+	shelf, sessCtx, msgStmr, msgfactory := cn.initializeNegotiationResources()
 
 	// 4. Negotiate Protocol
 	var err error
@@ -96,7 +94,7 @@ func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.Se
 		return nil, nil, nil, err
 	}
 
-	shared.applyNegotiatedSettings(shelf, sessCtx, pro, dty)
+	cn.applyNegotiatedSettings(shelf, sessCtx, pro, dty)
 	// set timezone version number in session context
 	sessCtx.SetTimeZoneVersionNumber(dty.GetTimeZoneVersionNumber())
 	common.Odl.Fine("connectionNegotiator: Negotiation complete", "SessionContext", sessCtx, "Shelf", shelf)
@@ -106,7 +104,7 @@ func (cn *connectionNegotiator) Negotiate(ctx context.Context) (*driverCommon.Se
 
 // SetDataBuffer Sets the data buffer used to create the marshaler within the negotiator
 func (cn *connectionNegotiator) SetDataBuffer(buf driverCommon.DataBuffer) {
-	cn.shared._dataBuffer = buf
+	cn._dataBuffer = buf
 }
 
 // _negotiateDatatype negotiates the datatype (TTIDTY) and returns the negotiated *ttc.tTIdty.

@@ -52,7 +52,7 @@ const maxPasswordBytes = 1024
 
 // passwordAuthenticator authenticates using user/password O5 logon.
 type passwordAuthenticator struct {
-	shared *passwordAuthenticatorCommon
+	*passwordAuthenticatorCommon
 }
 
 // newPasswordAuthenticator instantiates a new password authenticator.
@@ -71,26 +71,15 @@ func newPasswordAuthenticator(username, password string, connectString string) *
 	}
 
 	return &passwordAuthenticator{
-		shared: shared,
+		passwordAuthenticatorCommon: shared,
 	}
-}
-
-// SetSessionContext sets the session context to use within the authenticator.
-func (pa *passwordAuthenticator) SetSessionContext(sessCtx *driverCommon.SessionContext) {
-	pa.shared._sessionContext = sessCtx
-}
-
-// SetShelf sets the shelf to use within the authenticator.
-func (pa *passwordAuthenticator) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
-	pa.shared._shelf = *shelf
 }
 
 // Authenticate performs authentication.
 func (pa *passwordAuthenticator) Authenticate(ctx context.Context) error {
-	shared := pa.shared
-	common.Odl.Fine("Authenticate start for user", "userName", shared._username)
+	common.Odl.Fine("Authenticate start for user", "userName", pa._username)
 
-	if err := shared.validatePasswordLength(); err != nil {
+	if err := pa.validatePasswordLength(); err != nil {
 		return err
 	}
 
@@ -100,7 +89,7 @@ func (pa *passwordAuthenticator) Authenticate(ctx context.Context) error {
 		return common.NewOracleError(oracleErrors.AuthenticatorError, err, nil)
 	}
 
-	err = shared._doOAuth(ctx)
+	err = pa._doOAuth(ctx)
 	if err != nil {
 		common.Odl.Warn("Authentication failed, oauth keys exchange failed", "error", err)
 		return common.NewOracleError(oracleErrors.AuthenticatorError, err, nil)
@@ -111,11 +100,10 @@ func (pa *passwordAuthenticator) Authenticate(ctx context.Context) error {
 
 func (pa *passwordAuthenticator) _doOSESSKEY(ctx context.Context) error {
 	common.Odl.Fine("_doOSESSKEY start")
-	shared := pa.shared
-	shelf := shared._shelf
+	shelf := pa._shelf
 	streamer := shelf.GetMessageStreamer().(MessageStreamerInterface)
 
-	osesskey, err := shared.prepareOSESSKEY()
+	osesskey, err := pa.prepareOSESSKEY()
 	if err != nil {
 		return err
 	}
@@ -191,7 +179,7 @@ func (pa *passwordAuthenticator) _doOSESSKEY(ctx context.Context) error {
 		return common.NewOracleError(oracleErrors.InternalError, nil, nil)
 	}
 
-	shared._sessionContext.UpdateSessionProperties(osesskeyrpa.connectionValues)
+	pa._sessionContext.UpdateSessionProperties(osesskeyrpa.connectionValues)
 	common.Odl.Fine("_doOSESSKEY ended")
 	return nil
 

@@ -30,6 +30,24 @@ type tokenAuthenticatorCommon struct {
 	tokenProvider  oracleProviders.TokenAuthenticationProvider
 }
 
+// SetShelf stores the TTC shelf used to create and exchange authentication
+// messages.
+//
+// Parameters:
+//   - shelf: the TTC shelf bound to the current connection attempt.
+func (ta *tokenAuthenticatorCommon) SetShelf(shelf *ttiShelf[driverCommon.MessageType]) {
+	ta.shelf = *shelf
+}
+
+// SetSessionContext stores the session context used during token
+// authentication.
+//
+// Parameters:
+//   - sessCtx: the session context associated with the current connection attempt.
+func (ta *tokenAuthenticatorCommon) SetSessionContext(sessCtx *driverCommon.SessionContext) {
+	ta.sessionContext = sessCtx
+}
+
 // prepareOAuth validates token credentials and builds OAUTH without sending it.
 // It returns token, signing, or message-creation errors.
 func (ta *tokenAuthenticatorCommon) prepareOAuth(ctx context.Context) (driverCommon.Message[driverCommon.MessageType], error) {
